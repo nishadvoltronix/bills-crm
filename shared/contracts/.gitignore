@@ -1,0 +1,15 @@
+node_modules/
+dist/
+coverage/
+.private/
+.local-data/
+backups/
+*.sqlite*
+*.db
+*.db-*
+*.sql
+*.backup
+*.bak
+.env*
+*.log
+*.tsbuildinfo

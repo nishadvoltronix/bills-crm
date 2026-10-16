@@ -1,0 +1,62 @@
+# MANUAL TEMPLATE ONLY: review the deployment guide and staging evidence first.
+# Install as /etc/systemd/system/voltronix-crm-api.service only after approval.
+# Node 24.x must be installed at /usr/bin/node (verify the actual host path).
+# The current symlink must select a complete, independently accepted release.
+# Its backend/.local-data and operators directories are ordinary directories,
+# mode 0700, owned by voltronix-crm-api. Runtime JSON is an ordinary 0600 file.
+# Do not copy a migration/operator credential into the API runtime profile.
+[Unit]
+Description=Voltronix CRM Express API
+Documentation=file:/srv/voltronix-crm/current/docs/manual-deployment-guide.md
+Wants=network-online.target
+After=network-online.target mysql.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=voltronix-crm-api
+Group=voltronix-crm-api
+WorkingDirectory=/srv/voltronix-crm/current/backend
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/voltronix-crm/backend.env
+ExecStartPre=/usr/bin/test -f /srv/voltronix-crm/current/backend/dist/cli.js
+ExecStart=/usr/bin/node /srv/voltronix-crm/current/backend/dist/cli.js
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStartSec=60
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadOnlyPaths=/srv/voltronix-crm/current
+InaccessiblePaths=-/srv/voltronix-crm/current/backend/.local-data/operators/mysql-crm-migration.json
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=voltronix-crm-api
+
+# No MemoryDenyWriteExecute: Node/V8 needs JIT executable memory.
+# No writable application directory: uploads are protected MySQL BLOBs, PDFs
+# render in memory, and schema changes are a separate explicit operator step.
+# API startup verifies production configuration, target identity and readiness;
+# service active != accepted workflows. Probe /api/v1/health/ready separately.
+[Install]
+WantedBy=multi-user.target

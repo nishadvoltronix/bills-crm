@@ -1,0 +1,69 @@
+{
+  "name": "@voltronix/crm-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone Express CRM extraction with guarded local MySQL composition; live acceptance pending.",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "files": [
+    "dist",
+    "assets/quotation-pdf"
+  ],
+  "scripts": {
+    "demo:sqlite:init": "node --import tsx demo-sqlite/control.ts init",
+    "demo:sqlite:start": "node --import tsx demo-sqlite/control.ts start",
+    "demo:sqlite:stop": "node --import tsx demo-sqlite/control.ts stop",
+    "demo:sqlite:status": "node --import tsx demo-sqlite/control.ts status",
+    "demo:sqlite:verify": "node --import tsx demo-sqlite/control.ts verify",
+    "demo:sqlite:verify-anonymous": "node --import tsx demo-sqlite/control.ts verify-anonymous",
+    "demo:sqlite:backup": "node --import tsx demo-sqlite/control.ts backup",
+    "demo:sqlite:api": "node --import tsx demo-sqlite/api.ts",
+    "demo:sqlite:typecheck": "tsc -p tsconfig.sqlite-demo.json --noEmit",
+    "demo:sqlite:test": "node --import tsx --test demo-sqlite/*.test.ts",
+    "contracts:build": "npm --prefix ../shared/contracts run build",
+    "build": "npm run contracts:build && tsc -p tsconfig.build.json",
+    "typecheck": "npm run contracts:build && tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && tsx --test tests/*.test.ts",
+    "lint": "eslint .",
+    "verify:boundaries": "tsx scripts/verify-boundaries.ts",
+    "verify:mysql-auth": "tsx scripts/mysql-auth-harness.ts",
+    "verify:crm-demo": "tsx scripts/crm-demo-harness.ts",
+    "migration:plan": "tsx scripts/check-migrations.ts",
+    "mysql:operator": "node dist/operations/mysql-cli.js",
+    "verify:preservation": "tsx scripts/check-preservation.ts",
+    "test:mysql-auth:offline": "tsx --test tests/mysql-auth-harness-guards.test.ts tests/mysql-auth-runner.test.ts tests/mysql-auth-runner-metadata.test.ts tests/mysql-auth-observer.test.ts tests/mysql-auth-live-cases.test.ts tests/mysql-auth-browser-harness.test.ts",
+    "start": "node dist/cli.js",
+    "config:check": "tsx scripts/check-runtime.ts",
+    "legacy:check": "tsx scripts/check-legacy.ts",
+    "zoho:setup": "tsx scripts/zoho-setup.ts",
+    "zoho:check": "tsx scripts/zoho-setup.ts --check",
+    "zoho:inspect": "tsx scripts/zoho-inspect.ts",
+    "zoho:import:local": "tsx demo-sqlite/zoho-import.ts",
+    "zoho:sandbox:setup": "tsx scripts/zoho-sandbox.ts setup",
+    "zoho:sandbox:check": "tsx scripts/zoho-sandbox.ts check"
+  },
+  "dependencies": {
+    "@voltronix/crm-contracts": "file:../shared/contracts",
+    "bcryptjs": "3.0.3",
+    "express": "5.3.0",
+    "fflate": "0.8.3",
+    "helmet": "8.3.0",
+    "mysql2": "3.24.5",
+    "pdfkit": "0.20.2",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/express": "5.0.6",
+    "@types/node": "24.19.2",
+    "@types/pdfkit": "0.17.6",
+    "eslint": "10.12.0",
+    "pdfjs-dist": "6.4.299",
+    "playwright": "1.64.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.1"
+  }
+}
