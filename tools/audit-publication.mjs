@@ -21,6 +21,7 @@ const toolFiles = new Set([
   "tools/prepare-runtime-package.mjs", "tools/prepare-runtime-package.test.mjs",
   "tools/prepare-bills-package.mjs", "tools/prepare-bills-package.test.mjs",
   "tools/run-bills.mjs", "tools/run-bills.test.mjs",
+  "tools/run-hub.mjs", "tools/run-hub.test.mjs", "tools/hub-deployment.test.mjs",
   "tools/bills-foundation-smoke.mjs",
   "tools/run-local.mjs", "tools/run-local.test.mjs", "tools/run-suite.mjs",
 ]);
@@ -31,6 +32,9 @@ const deploymentFiles = new Set([
   "deploy/ubuntu/bills-crm-api.service",
   "deploy/ubuntu/bills-crm-web.service",
   "deploy/ubuntu/bills-web.env.example", "deploy/ubuntu/bills-api.env.example",
+  "deploy/ubuntu/hub-web.env.example", "deploy/ubuntu/hub-api.env.example",
+  "deploy/ubuntu/hub-deploy.sh", "deploy/ubuntu/hub-deploy.service", "deploy/ubuntu/hub-deploy.timer",
+  "deploy/ubuntu/hub-ecosystem.config.cjs", "deploy/ubuntu/hub-logrotate.conf",
 ]);
 // Operational instructions contain placeholders, not actual target profiles or
 // evidence. Other internal readiness reports and private handoffs stay excluded.
@@ -64,6 +68,19 @@ const templates = {
     NODE_ENV: "production", APP_ORIGIN: "https://bills.voltronix.ae", CRM_API_INSTANCE_ID: "bills-crm",
     CRM_DATABASE_MODE: "disabled", CRM_MYSQL_NETWORK_DISABLED: "1", ZOHO_ENABLED: "false", NEXT_TELEMETRY_DISABLED: "1",
     CRM_API_ENVIRONMENT: "production", CRM_API_HOST: "127.0.0.1", CRM_API_PORT: "3302",
+  },
+  "deploy/ubuntu/hub-web.env.example": {
+    NODE_ENV: "production", APP_ORIGIN: "https://hub.voltronix.ae", CRM_API_INSTANCE_ID: "hub-crm",
+    ZOHO_ENABLED: "false", NEXT_TELEMETRY_DISABLED: "1", CRM_WEB_HOST: "192.168.30.21", CRM_WEB_PORT: "3090",
+    CRM_FRONTEND_BACKEND: "express", CRM_EXPRESS_ORIGIN: "http://127.0.0.1:3002",
+  },
+  "deploy/ubuntu/hub-api.env.example": {
+    NODE_ENV: "production", APP_ORIGIN: "https://hub.voltronix.ae", CRM_API_INSTANCE_ID: "hub-crm",
+    ZOHO_ENABLED: "false", NEXT_TELEMETRY_DISABLED: "1", CRM_API_ENVIRONMENT: "production", CRM_API_HOST: "127.0.0.1", CRM_API_PORT: "3002",
+    CRM_RUNTIME_ENABLE: "approved-production-mysql-crm-runtime", CRM_RUNTIME_SOURCE: "environment",
+    CRM_MYSQL_HOST: "127.0.0.1", CRM_MYSQL_PORT: "3306", CRM_MYSQL_DATABASE: "voltronix_hub", CRM_MYSQL_USER: "", CRM_MYSQL_PASSWORD: "",
+    CRM_MYSQL_SERVER_UUID: "", CRM_MYSQL_APPROVED: "true", CRM_MYSQL_APPROVAL_REFERENCE: "", CRM_MYSQL_PROVISIONING_REFERENCE: "",
+    CRM_MYSQL_ISSUER_COMPANY: "", CRM_MYSQL_ISSUER_SALESPERSON: "",
   },
 };
 
@@ -157,6 +174,7 @@ function fixturePath(path) {
     || /^server\/demo-sqlite\/[^/]+\.test\.ts$/.test(path)
     || ["scripts/verify-mysql-offline-http.ts", "tools/audit-git-history.test.mjs", "tools/audit-publication.test.mjs", "tools/prepare-runtime-package.test.mjs",
       "tools/prepare-bills-package.test.mjs", "tools/run-bills.test.mjs", "tools/run-local.test.mjs", "tools/deployment-templates.test.mjs",
+      "tools/run-hub.test.mjs", "tools/hub-deployment.test.mjs",
       "tools/bills-foundation-smoke.mjs"].includes(path);
 }
 export function validateReviewedFixtures(records) {

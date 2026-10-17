@@ -6,6 +6,12 @@
   "description": "Single-root Next.js CRM and Express API; database activation remains an explicit separate operation.",
   "engines": { "node": ">=24.0.0 <25" },
   "scripts": {
+    "hub:build": "node tools/run-hub.mjs build",
+    "hub:check:web": "node tools/run-hub.mjs check-web",
+    "hub:check:api": "node tools/run-hub.mjs check-api",
+    "hub:start:web": "node tools/run-hub.mjs web",
+    "hub:start:api": "node tools/run-hub.mjs api",
+    "hub:admin": "node server/dist/operations/bootstrap-admin-cli.js",
     "bills:build": "node tools/run-bills.mjs build",
     "bills:check:web": "node tools/run-bills.mjs check-web",
     "bills:check:api": "node tools/run-bills.mjs check-api",

@@ -1,0 +1,13 @@
+# Enable only after a manual successful service run against reconciled main.
+[Unit]
+Description=Check accepted HUB main deployment every two minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/2:00
+Persistent=true
+AccuracySec=1s
+RandomizedDelaySec=0
+Unit=hub-deploy.service
+
+[Install]
+WantedBy=timers.target

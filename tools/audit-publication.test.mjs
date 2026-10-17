@@ -17,6 +17,8 @@ function fixture(t) {
   for (const path of ["server", "src", "tests", "scripts", "public", "resources", "shared/contracts", "tools"]) mkdirSync(join(root, path), { recursive: true });
   for (const path of [".editorconfig", "license.txt", "start-local.ps1", "start-sqlite-demo.ps1", "stop-local.ps1", "docs/PUBLICATION-README.md", "docs/PUBLICATION.gitignore",
     "deploy/ubuntu/nginx.conf.example", "deploy/ubuntu/bills-crm-api.service", "deploy/ubuntu/bills-crm-web.service",
+    "deploy/ubuntu/hub-deploy.sh", "deploy/ubuntu/hub-deploy.service", "deploy/ubuntu/hub-deploy.timer",
+    "deploy/ubuntu/hub-ecosystem.config.cjs", "deploy/ubuntu/hub-logrotate.conf",
     "docs/manual-deployment-guide.md", "docs/final-release-checklist.md", "docs/mysql-production-operator-guide.md",
     "docs/runtime-excluded-assets.md", "docs/staging-acceptance.md", "docs/backend-production-environment.md",
     "docs/legacy-production-compatibility.md", "docs/production-preparation-report.md"]) put(path);
@@ -26,6 +28,9 @@ function fixture(t) {
   const production = 'NODE_ENV=production\nAPP_ORIGIN=https://bills.voltronix.ae\nCRM_API_INSTANCE_ID=bills-crm\nCRM_DATABASE_MODE=disabled\nCRM_MYSQL_NETWORK_DISABLED=1\nZOHO_ENABLED=false\nNEXT_TELEMETRY_DISABLED=1\n';
   put('deploy/ubuntu/bills-web.env.example', production + 'CRM_WEB_HOST=127.0.0.1\nCRM_WEB_PORT=3301\nCRM_FRONTEND_BACKEND=express\nCRM_EXPRESS_ORIGIN=http://127.0.0.1:3302\n');
   put('deploy/ubuntu/bills-api.env.example', production + 'CRM_API_ENVIRONMENT=production\nCRM_API_HOST=127.0.0.1\nCRM_API_PORT=3302\n');
+  for (const name of ['hub-web.env.example', 'hub-api.env.example']) {
+    put(`deploy/ubuntu/${name}`, readFileSync(new URL(`../deploy/ubuntu/${name}`, import.meta.url), 'utf8'));
+  }
   return { root, put, audit: options => auditPublication(root, { git: false, inventory: null, ...options }) };
 }
 
@@ -51,12 +56,18 @@ test("private directories, legacy PHP, archives and original business files neve
   }
 });
 
-test("deployment publication includes the reviewed Bills services, proxy and four exact environment templates", () => {
-  for (const path of ["deploy/ubuntu/nginx.conf.example", "deploy/ubuntu/bills-crm-api.service", "deploy/ubuntu/bills-crm-web.service"]) {
+test("deployment publication includes exact Bills/HUB tooling and six reviewed environment templates", () => {
+  for (const path of ["deploy/ubuntu/nginx.conf.example", "deploy/ubuntu/bills-crm-api.service", "deploy/ubuntu/bills-crm-web.service",
+    "deploy/ubuntu/hub-deploy.sh", "deploy/ubuntu/hub-deploy.service", "deploy/ubuntu/hub-deploy.timer",
+    "deploy/ubuntu/hub-ecosystem.config.cjs", "deploy/ubuntu/hub-logrotate.conf",
+    "tools/run-hub.mjs", "tools/run-hub.test.mjs", "tools/hub-deployment.test.mjs",
+    "server/src/operations/bootstrap-admin.ts", "server/src/operations/bootstrap-admin-cli.ts", "server/tests/bootstrap-admin.test.ts"]) {
     assert.equal(classifyPublicationPath(path), "source");
   }
-  for (const path of [".env.example", "server/.env.example", "deploy/ubuntu/bills-web.env.example", "deploy/ubuntu/bills-api.env.example"]) assert.equal(classifyPublicationPath(path), "template");
-  for (const path of ["deploy/ubuntu/nginx.conf", "deploy/ubuntu/backend.env", "deploy/ubuntu/cert.pem", "deploy/ubuntu/other.service", "deploy/debian/voltronix-crm-api.service"]) {
+  for (const path of [".env.example", "server/.env.example", "deploy/ubuntu/bills-web.env.example", "deploy/ubuntu/bills-api.env.example",
+    "deploy/ubuntu/hub-web.env.example", "deploy/ubuntu/hub-api.env.example"]) assert.equal(classifyPublicationPath(path), "template");
+  for (const path of ["deploy/ubuntu/nginx.conf", "deploy/ubuntu/backend.env", "deploy/ubuntu/cert.pem", "deploy/ubuntu/other.service",
+    "deploy/debian/voltronix-crm-api.service", "deploy/ubuntu/hub-secret.env.example", "deploy/ubuntu/hub-other.sh", "tools/hub-unreviewed.mjs"]) {
     assert.notEqual(classifyPublicationPath(path), "source");
   }
 });

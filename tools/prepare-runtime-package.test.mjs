@@ -8,9 +8,12 @@ import { inspectRuntimeBytes, prepareRuntimePackage, safeRuntimePath, verifyRunt
 
 test('runtime boundary accepts only selected source/config and refuses private, generated, legacy or traversal paths', () => {
   for (const name of ['server/src/cli.ts', 'src/app/page.tsx', 'shared/contracts/src/index.ts',
-    'server/.env.example', 'deploy/ubuntu/crm-api.service']) assert.equal(safeRuntimePath(name), true);
+    'server/.env.example', 'deploy/ubuntu/crm-api.service', 'tools/run-hub.mjs',
+    'deploy/ubuntu/hub-deploy.timer', 'deploy/ubuntu/hub-ecosystem.config.cjs',
+    'deploy/ubuntu/hub-web.env.example', 'deploy/ubuntu/hub-api.env.example']) assert.equal(safeRuntimePath(name), true);
   for (const name of ['../server/src/cli.ts', '/server/src/cli.ts', 'backend\\src\\cli.ts', 'C:/file.ts',
     'server/.env', '.env.local', 'server/src/.env.example', 'server/src/uploads/file.ts',
+    'deploy/ubuntu/unreviewed.timer', 'deploy/ubuntu/unreviewed.config.cjs', 'deploy/ubuntu/unreviewed.env.example',
     'server/src/private.php', 'server/src/a.sqlite', 'server/src/a.key', 'server/tests/a.ts',
     'public/legacy/image.png', 'server/assets/quotation-pdf/stamp.jpg', 'server/dist/cli.js',
     '.git/config', 'server/src/../file.ts', 'server/src/bad./a.ts', 'server/src/a.zip']) assert.equal(safeRuntimePath(name), false, name);
@@ -27,6 +30,9 @@ test('runtime environment examples require exact reviewed local placeholders and
   const example = 'CRM_FRONTEND_BACKEND=express\nCRM_EXPRESS_ORIGIN=http://127.0.0.1:3002\nAPP_ORIGIN=http://127.0.0.1:3001\n';
   assert.doesNotThrow(() => inspectRuntimeBytes('.env.example', Buffer.from(example)));
   assert.throws(() => inspectRuntimeBytes('.env.example', Buffer.from(example + 'MYSQL_PASSWORD=secret\n')));
+  const hub = readFileSync(new URL('../deploy/ubuntu/hub-api.env.example', import.meta.url));
+  assert.doesNotThrow(() => inspectRuntimeBytes('deploy/ubuntu/hub-api.env.example', hub));
+  assert.throws(() => inspectRuntimeBytes('deploy/ubuntu/hub-api.env.example', Buffer.from(hub.toString('utf8').replace('CRM_MYSQL_USER=', 'CRM_MYSQL_USER=root'))));
 });
 
 const backendExample = 'CRM_API_ENVIRONMENT=development\nCRM_API_HOST=127.0.0.1\nCRM_API_PORT=3002\nAPP_ORIGIN=http://127.0.0.1:3001\nCRM_RUNTIME_ENABLE=\nCRM_RUNTIME_PROFILE=\nCRM_MYSQL_NETWORK_DISABLED=1\n';
@@ -39,6 +45,7 @@ const fixtureFiles = {
   'tsconfig.server.json': '{}\n',
   'tsconfig.server.build.json': '{}\n',
   'tools/run-local.mjs': '// Synthetic local launcher\n',
+  'tools/run-hub.mjs': '// Synthetic HUB launcher\n',
   'server/.env.example': backendExample,
   'package.json': packageFixture,
   'package-lock.json': '{}\n',

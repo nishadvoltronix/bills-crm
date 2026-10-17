@@ -602,8 +602,15 @@
     ]
   },
   {
+    "path": "server/tests/bootstrap-admin.test.ts",
+    "sha256": "06f192df41addb89abc9321d8304c456e68e8df6bbcf9b557b4394ae5700f3a5",
+    "categories": [
+      "literal-password-candidate"
+    ]
+  },
+  {
     "path": "tools/audit-publication.test.mjs",
-    "sha256": "3e3af6ed3414b2e28ad16ab4eadc32546531bdaf03b896ea71d582322c92b484",
+    "sha256": "e3304ed96e5e424aca88e565aeb35aab28a0e2c8c417fd5bb8c2807c4035bdff",
     "categories": [
       "literal-password-candidate"
     ]
@@ -617,7 +624,7 @@
   },
   {
     "path": "tools/prepare-bills-package.test.mjs",
-    "sha256": "9735883b438931687f48bd476ffe93b25cff7910b815bf060f4721bd161bb5d0",
+    "sha256": "fb500b6d121bb50ee764546db394e2fa9f1aa942a16510059411e93835d87b8b",
     "categories": [
       "literal-password-candidate",
       "private-key-material"
@@ -625,7 +632,7 @@
   },
   {
     "path": "tools/prepare-runtime-package.test.mjs",
-    "sha256": "761e22ee2df5bff6211440f75e1c7f945a73d2f236647f4818d5ca5ae5a83085",
+    "sha256": "65271efd5ca17c55e8d5fab64e9ec0ec6f426a14449c5f9f7a575301f57908fe",
     "categories": [
       "literal-password-candidate"
     ]

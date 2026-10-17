@@ -17,17 +17,22 @@ const privateSegments = new Set(['.git', 'node_modules', '.next', 'dist', 'out',
   '.local-data', '.local-dev', '.private', '.private-legacy', 'uploads', 'sessions', 'backups', 'credentials', '.credentials', 'secrets', 'release']);
 export const billsEnvironmentTemplates = Object.freeze(['.env.example', 'server/.env.example',
   'deploy/ubuntu/bills-web.env.example', 'deploy/ubuntu/bills-api.env.example']);
+export const hubEnvironmentTemplates = Object.freeze(['deploy/ubuntu/hub-web.env.example', 'deploy/ubuntu/hub-api.env.example']);
+const environmentTemplates = [...billsEnvironmentTemplates, ...hubEnvironmentTemplates];
 const fixed = ['.editorconfig', '.gitignore', 'AGENTS.md', 'README.md', 'package.json', 'package-lock.json',
   'tsconfig.json', 'tsconfig.server.json', 'tsconfig.server.build.json', 'tsconfig.demo.json', 'eslint.config.mjs', 'next.config.ts',
   'start-local.ps1', 'stop-local.ps1', 'start-sqlite-demo.ps1', 'shared/contracts/package.json', 'shared/contracts/tsconfig.json',
-  ...billsEnvironmentTemplates, 'deploy/ubuntu/nginx.conf.example', 'deploy/ubuntu/bills-crm-api.service', 'deploy/ubuntu/bills-crm-web.service',
+  ...environmentTemplates, 'deploy/ubuntu/nginx.conf.example', 'deploy/ubuntu/bills-crm-api.service', 'deploy/ubuntu/bills-crm-web.service',
+  'deploy/ubuntu/hub-deploy.sh', 'deploy/ubuntu/hub-deploy.service', 'deploy/ubuntu/hub-deploy.timer',
+  'deploy/ubuntu/hub-ecosystem.config.cjs', 'deploy/ubuntu/hub-logrotate.conf',
   'docs/manual-deployment-guide.md', 'docs/final-release-checklist.md', 'docs/mysql-production-operator-guide.md',
   'docs/runtime-excluded-assets.md', 'docs/staging-acceptance.md', 'docs/backend-production-environment.md',
   'docs/legacy-production-compatibility.md'];
 const optional = ['docs/production-preparation-report.md'];
 const taskSourceAdditions = ['tools/run-bills.mjs', 'tools/run-bills.test.mjs', 'tools/bills-foundation-smoke.mjs',
   'tools/prepare-bills-package.mjs', 'tools/prepare-bills-package.test.mjs', 'tests/express-identity.test.ts',
-  'server/tests/legacy-compat-runtime-refusal.test.ts'];
+  'server/tests/legacy-compat-runtime-refusal.test.ts', 'tools/run-hub.mjs', 'tools/run-hub.test.mjs', 'tools/hub-deployment.test.mjs',
+  'server/src/operations/bootstrap-admin.ts', 'server/src/operations/bootstrap-admin-cli.ts', 'server/tests/bootstrap-admin.test.ts'];
 export const billsRequiredFiles = Object.freeze([...fixed, ...reviewedPassiveAssetPaths, ...reviewedThemeTextPaths,
   'src/app/layout.tsx', 'src/app/page.tsx', 'server/src/cli.ts', 'shared/contracts/src/index.ts',
   'tools/run-local.mjs', 'tools/audit-publication.mjs', 'tools/audit-git-history.mjs',
@@ -39,7 +44,7 @@ const envName = /(?:^|\/)\.env(?:\.|$)|\.env(?:\.|$)/i;
 export function safeBillsPath(name) {
   try { normalizePublicationPath(name); } catch { return false; }
   if (name.split('/').some(part => privateSegments.has(part.toLowerCase()) || /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) return false;
-  if (billsEnvironmentTemplates.includes(name)) return true;
+  if (environmentTemplates.includes(name)) return true;
   if (envName.test(name) || forbiddenFiles.test(name)) return false;
   if (fixed.includes(name) || optional.includes(name)) return true;
   const kind = classifyPublicationPath(name);
@@ -128,7 +133,7 @@ export function inspectBillsBytes(name, bytes, options = {}) {
     privateContent: options.privateContent, genericCredentials: () => remaining });
   // Binary pins do not bypass known generic token/key scanning.
   if (classifyPublicationPath(name) === 'pinned-passive-asset') findings.push(...remaining);
-  if (billsEnvironmentTemplates.includes(name)) findings.push(...validateTemplate(name, bytes));
+  if (environmentTemplates.includes(name)) findings.push(...validateTemplate(name, bytes));
   return [...new Set(findings)];
 }
 
@@ -158,7 +163,7 @@ function manifestFor(selected, options) {
   return { version: 1, status, files: selected.map(item => ({ path: item.path, bytes: item.bytes.length, sha256: item.sha256 })),
     scannerScope: { genericCredentials: true, exactReviewedSyntheticFixtures: true, pinnedPassiveAssets: true, frozenSourcePaths: true,
       historicalCredentialScan: typeof options.knownCredentials === 'function', historicalPrivateCopyScan: typeof options.privateContent === 'function' },
-    exclusions: ['Actual environment/credential/profile files; only four exact validated example templates included',
+    exclusions: ['Actual environment/credential/profile files; only six exact validated example templates included',
       'Dependencies, builds, Git history, databases, uploads, sessions, backups, archived PHP and private artifacts',
       'Private quotation images/signatures/stamps, private public/legacy/manifest.json and historical favicon'],
     limitations: ['Source candidate only; no production readiness or legacy adapter compatibility is established.',

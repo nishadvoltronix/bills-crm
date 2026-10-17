@@ -7,19 +7,24 @@ import { validateTemplate } from './audit-publication.mjs';
 
 const sourceRoots = ['server/src', 'src', 'shared/contracts/src', 'deploy/ubuntu'];
 const fixed = ['package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.server.json', 'tsconfig.server.build.json',
-  'server/.env.example', 'tools/run-local.mjs',
+  'server/.env.example', 'tools/run-local.mjs', 'tools/run-hub.mjs',
   'next.config.ts', '.env.example', 'shared/contracts/package.json',
   'shared/contracts/tsconfig.json', 'docs/manual-deployment-guide.md', 'docs/final-release-checklist.md',
   'docs/mysql-production-operator-guide.md', 'docs/runtime-excluded-assets.md', 'docs/staging-acceptance.md',
   'docs/backend-production-environment.md'];
+const deploymentExceptions = new Set(['deploy/ubuntu/hub-deploy.timer', 'deploy/ubuntu/hub-ecosystem.config.cjs']);
+const environmentTemplates = new Set(['.env.example', 'server/.env.example',
+  'deploy/ubuntu/bills-web.env.example', 'deploy/ubuntu/bills-api.env.example',
+  'deploy/ubuntu/hub-web.env.example', 'deploy/ubuntu/hub-api.env.example']);
 const forbidden = /(?:^|\/)(?:\.git|\.local-data|\.private|\.private-legacy|node_modules|\.next|dist|tests|backups|uploads|assets|public)(?:\/|$)|\.(?:php\d*|phtml|sql|sqlite\d*|db|log|pem|key|zip|gz|bak)$/i;
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
 export function safeRuntimePath(name) {
   if (typeof name !== 'string' || !name || isAbsolute(name) || /[\\:\x00-\x1f\x7f]/.test(name)
     || name.split('/').some(part => !part || part === '.' || part === '..' || /[. ]$/.test(part)) || forbidden.test(name)) return false;
-  if (name.split('/').some(part => part.startsWith('.env')) && !['server/.env.example', '.env.example'].includes(name)) return false;
-  return fixed.includes(name) || (sourceRoots.some(root => name.startsWith(root + '/')) && /\.(?:ts|tsx|css|json|service|conf|md|sh|example)$/.test(name));
+  if (/(?:^|\/)\.env(?:\.|$)|\.env(?:\.|$)/i.test(name) && !environmentTemplates.has(name)) return false;
+  return fixed.includes(name) || deploymentExceptions.has(name)
+    || (sourceRoots.some(root => name.startsWith(root + '/')) && /\.(?:ts|tsx|css|json|service|conf|md|sh|example)$/.test(name));
 }
 
 function ordinary(root, name, file = true) {
@@ -40,7 +45,7 @@ export function inspectRuntimeBytes(name, bytes, known = () => []) {
   const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   if (/^(?:SQLite format 3|%PDF-|PK\x03\x04)/.test(text) || /^\s*(?:BEGIN TRANSACTION;|CREATE TABLE\s|INSERT INTO\s|-- MySQL dump)/i.test(text)
     || known(bytes).length || scanCredentialPatterns(bytes).length) throw Error('Runtime content check refused.');
-  if ((name === '.env.example' || name.endsWith('/.env.example')) && validateTemplate(name, bytes).length) throw Error('Runtime environment template refused.');
+  if (environmentTemplates.has(name) && validateTemplate(name, bytes).length) throw Error('Runtime environment template refused.');
   if (name.endsWith('.json')) {
     const value = JSON.parse(text);
     if (value && !Array.isArray(value) && typeof value === 'object'
@@ -68,7 +73,8 @@ function runtimeBytes(name, bytes) {
   if (name !== 'package.json') return bytes;
   const manifest = JSON.parse(bytes.toString('utf8'));
   // Keep the original dependencies/lockfile graph, but omit unavailable development commands.
-  const keep = ['contracts:build', 'build', 'build:server', 'build:web', 'start', 'start:api:configured', 'mysql:operator'];
+  const keep = ['contracts:build', 'build', 'build:server', 'build:web', 'start', 'start:api:configured', 'mysql:operator',
+    'hub:build', 'hub:check:web', 'hub:check:api', 'hub:start:web', 'hub:start:api', 'hub:admin'];
   manifest.scripts = Object.fromEntries(keep.filter(key => manifest.scripts[key]).map(key => [key, manifest.scripts[key]]));
   return Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
 }

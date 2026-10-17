@@ -15,7 +15,7 @@ next-env.d.ts
 .idea/
 .vscode/
 
-# Exactly four reviewed templates; no blanket exception for *.example.
+# Explicitly reviewed templates; no blanket exception for *.example.
 .env*
 *.env
 *.env.*
@@ -23,6 +23,8 @@ next-env.d.ts
 !/.env.example
 !/deploy/ubuntu/bills-web.env.example
 !/deploy/ubuntu/bills-api.env.example
+!/deploy/ubuntu/hub-web.env.example
+!/deploy/ubuntu/hub-api.env.example
 
 # Original/private state must never be committed, even in a private repository.
 /.git-original/

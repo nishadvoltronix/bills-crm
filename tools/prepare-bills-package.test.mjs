@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { billsEnvironmentTemplates, billsRequiredFiles, checkBillsSource, inspectBillsBytes, prepareBillsPackage, safeBillsPath, verifyBillsPackage } from './prepare-bills-package.mjs';
+import { billsEnvironmentTemplates, hubEnvironmentTemplates, billsRequiredFiles, checkBillsSource, inspectBillsBytes, prepareBillsPackage, safeBillsPath, verifyBillsPackage } from './prepare-bills-package.mjs';
 import { reviewedPassiveAssetPaths, reviewedThemeTextPaths } from './audit-publication.mjs';
 
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -16,6 +16,7 @@ const templateBodies = {
   'server/.env.example': 'CRM_API_ENVIRONMENT=development\nCRM_API_HOST=127.0.0.1\nCRM_API_PORT=3002\nAPP_ORIGIN=http://127.0.0.1:3001\nCRM_RUNTIME_ENABLE=\nCRM_RUNTIME_PROFILE=\nCRM_MYSQL_NETWORK_DISABLED=1\n',
   'deploy/ubuntu/bills-web.env.example': productionCommon + 'CRM_WEB_HOST=127.0.0.1\nCRM_WEB_PORT=3301\nCRM_FRONTEND_BACKEND=express\nCRM_EXPRESS_ORIGIN=http://127.0.0.1:3302\n',
   'deploy/ubuntu/bills-api.env.example': productionCommon + 'CRM_API_ENVIRONMENT=production\nCRM_API_HOST=127.0.0.1\nCRM_API_PORT=3302\n',
+  ...Object.fromEntries(hubEnvironmentTemplates.map(name => [name, readFileSync(join(repository, name), 'utf8')])),
 };
 function fixture(t) {
   const temporaryRoot = realpathSync(tmpdir()), root = mkdtempSync(join(temporaryRoot, 'bills-package-synthetic-'));
@@ -42,10 +43,11 @@ function fixture(t) {
   return { root, put, package: () => prepareBillsPackage(root) };
 }
 
-test('Bills source paths include necessary source/config/assets and only four exact environment examples', () => {
+test('source paths include exact Bills/HUB source/config/assets and six environment examples', () => {
   for (const path of [...billsRequiredFiles, 'server/tests/synthetic.test.ts', 'src/app/api/[id]/route.ts', 'tools/run-bills.test.mjs']) assert.equal(safeBillsPath(path), true, path);
   for (const path of ['.env', '.env.production', 'server/.env.local', 'server/src/.env.example', 'deploy/ubuntu/bills-web.env',
-    'deploy/ubuntu/other.env.example', 'server/src/customer.db', 'server/src/secret.key', 'server/src/private.json',
+    'deploy/ubuntu/other.env.example', 'deploy/ubuntu/hub-other.env.example', 'deploy/ubuntu/hub-api.env',
+    'deploy/ubuntu/hub-other.service', 'deploy/ubuntu/hub-unreviewed.sh', 'server/src/customer.db', 'server/src/secret.key', 'server/src/private.json',
     'server/src/credentials.json', 'public/legacy/manifest.json', 'public/legacy/assets/images/favicon_voltronix.png',
     'resources/quotation-pdf/stamp.png', 'server/assets/quotation-pdf/sign.jpg', 'node_modules/tool.js', '.git/config',
     'src/uploads/customer.ts', 'src/sessions/session.ts', 'src/.local-data/fixture.ts', 'server/dist/cli.js',
@@ -56,6 +58,19 @@ test('Bills source paths include necessary source/config/assets and only four ex
     assert.equal(safeBillsPath(path), false, path);
   }
   assert.equal(billsEnvironmentTemplates.length, 4);
+  assert.equal(hubEnvironmentTemplates.length, 2);
+});
+
+test('HUB templates permit exact nonsecret endpoints and blank private settings only', () => {
+  for (const path of hubEnvironmentTemplates) assert.deepEqual(inspectBillsBytes(path, Buffer.from(templateBodies[path])), []);
+  const path = 'deploy/ubuntu/hub-api.env.example', body = templateBodies[path];
+  for (const changed of [body.replace('CRM_MYSQL_PASSWORD=', 'CRM_MYSQL_PASSWORD=private-value'),
+    body.replace('CRM_MYSQL_DATABASE=voltronix_hub', 'CRM_MYSQL_DATABASE=existing_application'),
+    body.replace('CRM_MYSQL_USER=', 'CRM_MYSQL_USER=root'), body + 'NODE_OPTIONS=--import=unsafe\n',
+    templateBodies['deploy/ubuntu/hub-web.env.example'].replace('192.168.30.21', '0.0.0.0')]) {
+    const target = changed.includes('CRM_WEB_HOST') ? 'deploy/ubuntu/hub-web.env.example' : path;
+    assert.ok(inspectBillsBytes(target, Buffer.from(changed)).length);
+  }
 });
 
 test('Bills example templates require disabled database/Zoho and approved endpoints', () => {

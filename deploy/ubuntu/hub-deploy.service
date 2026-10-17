@@ -1,0 +1,35 @@
+# Install only after initial HUB acceptance, PM2 dump backup and startup review.
+# Copy hub-deploy.sh to /home/rjpmadmin/hub-deploy/hub-deploy.sh, mode 0750.
+# Prepare hub-deploy-state and hub-deploy-logs as rjpmadmin, mode 0700 FIRST.
+# Resolve the real dedicated Node 24 and PM2 paths; amend these settings if needed.
+[Unit]
+Description=Build and deploy accepted HUB main updates
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/home/rjpmadmin/hub-deploy-state/accepted.json
+ConditionPathExists=/home/rjpmadmin/hub-config/backend.env
+ConditionPathExists=/home/rjpmadmin/hub-config/frontend.env
+
+[Service]
+Type=oneshot
+User=rjpmadmin
+Group=rjpmadmin
+WorkingDirectory=/home/rjpmadmin/voltronix-hub-deployment
+Environment=HOME=/home/rjpmadmin
+Environment=USER=rjpmadmin
+Environment=LOGNAME=rjpmadmin
+Environment=PM2_HOME=/home/rjpmadmin/.pm2
+Environment=PATH=/var/www/hub.voltronix_ae/runtime/node/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HUB_NODE_BIN=/var/www/hub.voltronix_ae/runtime/node/bin/node
+Environment=HUB_PM2_BIN=/usr/local/bin/pm2
+ExecStart=/bin/bash /home/rjpmadmin/hub-deploy/hub-deploy.sh
+TimeoutStartSec=30min
+TimeoutStopSec=180
+KillMode=mixed
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hub-deploy
