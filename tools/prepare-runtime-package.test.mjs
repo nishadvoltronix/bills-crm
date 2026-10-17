@@ -7,26 +7,26 @@ import test from 'node:test';
 import { inspectRuntimeBytes, prepareRuntimePackage, safeRuntimePath, verifyRuntimePackage } from './prepare-runtime-package.mjs';
 
 test('runtime boundary accepts only selected source/config and refuses private, generated, legacy or traversal paths', () => {
-  for (const name of ['backend/src/cli.ts', 'frontend/src/app/page.tsx', 'shared/contracts/src/index.ts',
-    'backend/.env.example', 'deploy/ubuntu/crm-api.service']) assert.equal(safeRuntimePath(name), true);
-  for (const name of ['../backend/src/cli.ts', '/backend/src/cli.ts', 'backend\\src\\cli.ts', 'C:/file.ts',
-    'backend/.env', 'frontend/.env.local', 'backend/src/.env.example', 'backend/src/uploads/file.ts',
-    'backend/src/private.php', 'backend/src/a.sqlite', 'backend/src/a.key', 'backend/tests/a.ts',
-    'frontend/public/legacy/image.png', 'backend/assets/quotation-pdf/stamp.jpg', 'backend/dist/cli.js',
-    '.git/config', 'backend/src/../file.ts', 'backend/src/bad./a.ts', 'backend/src/a.zip']) assert.equal(safeRuntimePath(name), false, name);
+  for (const name of ['server/src/cli.ts', 'src/app/page.tsx', 'shared/contracts/src/index.ts',
+    'server/.env.example', 'deploy/ubuntu/crm-api.service']) assert.equal(safeRuntimePath(name), true);
+  for (const name of ['../server/src/cli.ts', '/server/src/cli.ts', 'backend\\src\\cli.ts', 'C:/file.ts',
+    'server/.env', '.env.local', 'server/src/.env.example', 'server/src/uploads/file.ts',
+    'server/src/private.php', 'server/src/a.sqlite', 'server/src/a.key', 'server/tests/a.ts',
+    'public/legacy/image.png', 'server/assets/quotation-pdf/stamp.jpg', 'server/dist/cli.js',
+    '.git/config', 'server/src/../file.ts', 'server/src/bad./a.ts', 'server/src/a.zip']) assert.equal(safeRuntimePath(name), false, name);
 });
 test('runtime content checks reject renamed binary, credentials and malformed JSON without leaking values', () => {
   for (const bytes of [Buffer.from('SQLite format 3\0private'), Buffer.from('%PDF-1.7'), Buffer.from('export const password = "synthetic-private-password";')]) {
-    assert.throws(() => inspectRuntimeBytes('backend/src/file.ts', bytes), error => !error.message.includes('synthetic-private-password'));
+    assert.throws(() => inspectRuntimeBytes('server/src/file.ts', bytes), error => !error.message.includes('synthetic-private-password'));
   }
-  assert.throws(() => inspectRuntimeBytes('backend/src/file.json', Buffer.from('{broken')));
-  assert.throws(() => inspectRuntimeBytes('backend/src/file.ts', Buffer.from('arbitrary known match'), () => ['known-secret']));
-  assert.doesNotThrow(() => inspectRuntimeBytes('backend/src/file.ts', Buffer.from('export const value = 1;')));
+  assert.throws(() => inspectRuntimeBytes('server/src/file.json', Buffer.from('{broken')));
+  assert.throws(() => inspectRuntimeBytes('server/src/file.ts', Buffer.from('arbitrary known match'), () => ['known-secret']));
+  assert.doesNotThrow(() => inspectRuntimeBytes('server/src/file.ts', Buffer.from('export const value = 1;')));
 });
 test('runtime environment examples require exact reviewed local placeholders and never arbitrary credentials', () => {
   const example = 'CRM_FRONTEND_BACKEND=express\nCRM_EXPRESS_ORIGIN=http://127.0.0.1:3002\nAPP_ORIGIN=http://127.0.0.1:3001\n';
-  assert.doesNotThrow(() => inspectRuntimeBytes('frontend/.env.example', Buffer.from(example)));
-  assert.throws(() => inspectRuntimeBytes('frontend/.env.example', Buffer.from(example + 'MYSQL_PASSWORD=secret\n')));
+  assert.doesNotThrow(() => inspectRuntimeBytes('.env.example', Buffer.from(example)));
+  assert.throws(() => inspectRuntimeBytes('.env.example', Buffer.from(example + 'MYSQL_PASSWORD=secret\n')));
 });
 
 const backendExample = 'CRM_API_ENVIRONMENT=development\nCRM_API_HOST=127.0.0.1\nCRM_API_PORT=3002\nAPP_ORIGIN=http://127.0.0.1:3001\nCRM_RUNTIME_ENABLE=\nCRM_RUNTIME_PROFILE=\nCRM_MYSQL_NETWORK_DISABLED=1\n';
@@ -36,18 +36,16 @@ const packageFixture = JSON.stringify({ name: 'synthetic-runtime-package', priva
   'mysql:operator': 'node fixture-operator.js', test: 'node fixture-test.js', 'demo:sqlite:start': 'node fixture-demo.js',
 }, dependencies: {} }, null, 2) + '\n';
 const fixtureFiles = {
-  'backend/package.json': packageFixture,
-  'backend/package-lock.json': '{}\n',
-  'backend/tsconfig.json': '{}\n',
-  'backend/tsconfig.build.json': '{}\n',
-  'backend/.env.example': backendExample,
-  'frontend/package.json': packageFixture,
-  'frontend/package-lock.json': '{}\n',
-  'frontend/tsconfig.json': '{}\n',
-  'frontend/next.config.ts': 'export default {};\n',
-  'frontend/.env.example': frontendExample,
+  'tsconfig.server.json': '{}\n',
+  'tsconfig.server.build.json': '{}\n',
+  'tools/run-local.mjs': '// Synthetic local launcher\n',
+  'server/.env.example': backendExample,
+  'package.json': packageFixture,
+  'package-lock.json': '{}\n',
+  'tsconfig.json': '{}\n',
+  'next.config.ts': 'export default {};\n',
+  '.env.example': frontendExample,
   'shared/contracts/package.json': '{"name":"synthetic-contracts","private":true}\n',
-  'shared/contracts/package-lock.json': '{}\n',
   'shared/contracts/tsconfig.json': '{}\n',
   'docs/manual-deployment-guide.md': '# Synthetic manual guide\n',
   'docs/final-release-checklist.md': '# Synthetic checklist\n',
@@ -55,8 +53,8 @@ const fixtureFiles = {
   'docs/runtime-excluded-assets.md': '# Synthetic asset exclusions\n',
   'docs/staging-acceptance.md': '# Synthetic acceptance\n',
   'docs/backend-production-environment.md': '# Synthetic production configuration\n',
-  'backend/src/cli.ts': 'export const syntheticValue = 1;\n',
-  'frontend/src/app/page.tsx': 'export default function Page() { return null; }\n',
+  'server/src/cli.ts': 'export const syntheticValue = 1;\n',
+  'src/app/page.tsx': 'export default function Page() { return null; }\n',
   'shared/contracts/src/index.ts': 'export type SyntheticContract = { id: string };\n',
   'deploy/ubuntu/fixture.service': '[Service]\nType=simple\n',
 };
@@ -103,34 +101,32 @@ test('synthetic runtime package create/verify includes the exact manifest and pr
     status: 'VERIFIED_RUNTIME_SOURCE_CONTENTS', files: created.files, secretValuesDisclosed: false, productionAccepted: false,
   });
   const transformed = manifest.files.filter(item => item.transformed).map(item => item.path);
-  assert.deepEqual(transformed, ['backend/package.json', 'frontend/package.json']);
-  assert.deepEqual(Object.keys(JSON.parse(readFileSync(inside(output, 'backend/package.json'), 'utf8')).scripts),
+  assert.deepEqual(transformed, ['package.json']);
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(inside(output, 'package.json'), 'utf8')).scripts),
     ['contracts:build', 'build', 'start', 'mysql:operator']);
-  assert.deepEqual(Object.keys(JSON.parse(readFileSync(inside(output, 'frontend/package.json'), 'utf8')).scripts),
-    ['contracts:build', 'build', 'start']);
   for (const [name, hash] of Object.entries(original)) assert.equal(digest(readFileSync(inside(root, name))), hash);
 }));
 
 test('runtime verification rejects changed output bytes despite an otherwise valid source and manifest', () => withFixture(root => {
   const created = prepareRuntimePackage(root, known), output = inside(root, created.output);
-  writeFileSync(inside(output, 'backend/src/cli.ts'), 'export const syntheticValue = 2;\n');
+  writeFileSync(inside(output, 'server/src/cli.ts'), 'export const syntheticValue = 2;\n');
   assert.throws(() => verifyRuntimePackage(root, created.output, known), /Runtime manifest mismatch/);
 }));
 
 test('runtime verification rejects deleting a required output file together with its manifest entry', () => withFixture(root => {
   const created = prepareRuntimePackage(root, known), output = inside(root, created.output);
   const filename = inside(output, 'runtime-manifest.json'), manifest = JSON.parse(readFileSync(filename, 'utf8'));
-  const selected = inside(output, 'backend/src/cli.ts');
+  const selected = inside(output, 'server/src/cli.ts');
   assert.equal(lstatSync(selected).isFile(), true);
   unlinkSync(selected);
-  manifest.files = manifest.files.filter(item => item.path !== 'backend/src/cli.ts');
+  manifest.files = manifest.files.filter(item => item.path !== 'server/src/cli.ts');
   writeFileSync(filename, JSON.stringify(manifest, null, 2) + '\n');
   assert.throws(() => verifyRuntimePackage(root, created.output, known), /Runtime manifest refused/);
 }));
 
 test('runtime verification rejects an added unlisted secret-like fixture without exposing its contents', () => withFixture(root => {
   const created = prepareRuntimePackage(root, known), output = inside(root, created.output);
-  writeFileSync(inside(output, 'backend/src/accidental-secrets.json'), '{"password":"synthetic-private-value-not-a-credential"}\n', { flag: 'wx' });
+  writeFileSync(inside(output, 'server/src/accidental-secrets.json'), '{"password":"synthetic-private-value-not-a-credential"}\n', { flag: 'wx' });
   assert.throws(() => verifyRuntimePackage(root, created.output, known), error =>
     error.message === 'Runtime extra file.' && !error.message.includes('synthetic-private-value'));
 }));
@@ -152,7 +148,7 @@ test('runtime creation and verification reject directory links rather than follo
     mkdirSync(target); writeFileSync(join(target, 'fixture.ts'), 'export const synthetic = true;\n', { flag: 'wx' });
     const created = phase === 'verify' ? prepareRuntimePackage(root, known) : undefined;
     const destinationRoot = created ? inside(root, created.output) : root;
-    const destination = inside(destinationRoot, 'backend/src/linked');
+    const destination = inside(destinationRoot, 'server/src/linked');
     symlinkSync(target, destination, process.platform === 'win32' ? 'junction' : 'dir');
     assert.equal(lstatSync(destination).isSymbolicLink(), true);
     if (created) assert.throws(() => verifyRuntimePackage(root, created.output, known), /Runtime extra link/);
@@ -163,6 +159,6 @@ test('runtime creation and verification reject directory links rather than follo
 
 test('runtime verification rejects a changed original after capture rather than treating stale package evidence as current', () => withFixture(root => {
   const created = prepareRuntimePackage(root, known);
-  writeFileSync(inside(root, 'backend/src/cli.ts'), 'export const syntheticValue = 2;\n');
+  writeFileSync(inside(root, 'server/src/cli.ts'), 'export const syntheticValue = 2;\n');
   assert.throws(() => verifyRuntimePackage(root, created.output, known), /Runtime source changed after capture/);
 }));

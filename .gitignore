@@ -19,8 +19,8 @@ next-env.d.ts
 .env*
 *.env
 *.env.*
-!/backend/.env.example
-!/frontend/.env.example
+!/server/.env.example
+!/.env.example
 
 # Original/private state must never be committed, even in a private repository.
 /.git-original/
@@ -65,12 +65,18 @@ secrets.json
 access.json
 
 # Company backgrounds contain private signature/stamp material.
-/backend/assets/quotation-pdf/*.png
-/backend/assets/quotation-pdf/*.jpg
-/backend/assets/quotation-pdf/*.jpeg
-/frontend/assets/quotation-pdf/*.png
-/frontend/assets/quotation-pdf/*.jpg
-/frontend/assets/quotation-pdf/*.jpeg
+/server/assets/quotation-pdf/*.png
+/server/assets/quotation-pdf/*.jpg
+/server/assets/quotation-pdf/*.jpeg
+/resources/quotation-pdf/*.png
+/resources/quotation-pdf/*.jpg
+/resources/quotation-pdf/*.jpeg
 
 # Historical tooling is not a PHP runtime or release dependency of this checkout.
 *.php
+
+# Excluded private provenance and historical original-derived asset
+/public/legacy/manifest.json
+/public/legacy/assets/images/favicon_voltronix.png
+/resources/quotation-pdf/README.md
+/server/assets/quotation-pdf/README.md

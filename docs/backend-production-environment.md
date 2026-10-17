@@ -1,3 +1,5 @@
+> Current layout: Next.js is at the repository root; Express is in `server/`. Use the root README for install/build/start commands. The preparation checkpoints below are not production acceptance.
+
 # Backend production environment configuration
 
 Owner-selected origin: **https://bills.voltronix.ae**, without a trailing slash. Selection is not DNS/TLS/reachability verification; the domain was not contacted. This is a source/configuration change, not deployment, migration or credential provisioning. Existing real environments and the running SQLite demo stay unchanged.
@@ -7,8 +9,10 @@ Owner-selected origin: **https://bills.voltronix.ae**, without a trailing slash.
 ## Where settings belong
 
 - Supplied Ubuntu systemd units: `/etc/voltronix-crm/backend.env` and `/etc/voltronix-crm/frontend.env`, root-owned 0600, private directory. systemd supplies process settings; no duplicate package `.env` is necessary. Provision only in a separately approved staging/deployment phase.
-- Independent backend CLI: `<release>/backend/.env`, anchored at the backend executable regardless of working directory. Credential-bearing files require current-process ownership and private access (POSIX no group/other bits; Windows restricted current-owner/SYSTEM ACL). The loader only checks permissions; it never changes them. No root/project or old `nextjs` fallback.
+- Independent backend CLI: `<release>/server/.env`, anchored at the backend executable regardless of working directory. Credential-bearing files require current-process ownership and private access (POSIX no group/other bits; Windows restricted current-owner/SYSTEM ACL). The loader only checks permissions; it never changes them. No root/project or old `nextjs` fallback.
 - Frontend needs only its three server-side bridge settings. Never provide DB/Zoho credentials to frontend or `NEXT_PUBLIC_*`.
+
+All npm commands run from the project root, with one root dependency installation and lockfile. Root `npm run dev` and `npm start` intentionally run the database-free local foundation; they do not load `server/.env` or activate configured MySQL. They are not production service entrypoints. After separate target approval and acceptance, root `npm run start:api:configured` invokes the real compiled API at `server/dist/cli.js`; the supplied systemd units start API and Next independently with their separate environments. The root README remains authoritative for local run commands and current limitations.
 
 ## Production backend template — inactive, owner fills private values
 
@@ -62,12 +66,12 @@ No trailing slash and no `/api/v1` on `CRM_EXPRESS_ORIGIN`. `NODE_ENV=production
 
 ### Manual PMCRM credential setup and check
 
-The separate local helper supports the owner's confirmed **US PMCRM** client only: Accounts at `https://accounts.zoho.com`, CRM API at `https://www.zohoapis.com`, and the registered redirect `https://crm.voltronix.ae/crm/pm/index.php/zoho/callback`. It does not enable runtime integration or connect to MySQL. Store the current client ID and secret privately in `backend/.env` first; the existing private-file ownership/permissions checks still apply.
+The separate local helper supports the owner's confirmed **US PMCRM** client only: Accounts at `https://accounts.zoho.com`, CRM API at `https://www.zohoapis.com`, and the registered redirect `https://crm.voltronix.ae/crm/pm/index.php/zoho/callback`. It does not enable runtime integration or connect to MySQL. Store the current client ID and secret privately in `server/.env` first; the existing private-file ownership/permissions checks still apply.
 
 Run from the repository root in your local interactive terminal:
 
 ```powershell
-npm --prefix backend run zoho:setup
+npm run zoho:setup
 ```
 
 Open the fresh authorization link printed by that run and approve the intended **Production** organization. The requested scopes are `ZohoCRM.modules.ALL,ZohoCRM.settings.fields.READ,ZohoSearch.securesearch.READ,ZohoCRM.org.READ,ZohoCRM.users.READ` (full CRM module access, field metadata, search, organization-read and user-read). The last two scopes were added for future explicit organization/user verification; refreshing an older grant does not add them. This optional interactive command replaces the saved refresh token after successful exchange, so do not rerun it simply to perform the ordinary read-only check. Copy the complete browser address after redirect, even if the callback page shows 404, and paste it into the waiting terminal promptly. Input is hidden. Do not paste the URL into chat or put it in shell arguments/history. The one-time code must come from this run's link and is short-lived.
@@ -77,7 +81,7 @@ The helper extracts the code without opening the callback URL, exchanges it with
 To verify the saved refresh token and read-only API access later:
 
 ```powershell
-npm --prefix backend run zoho:check
+npm run zoho:check
 ```
 
 These commands send credentials only to the fixed HTTPS Zoho endpoints, print no tokens/secrets, skip MySQL, and leave `ZOHO_ENABLED` unchanged. A successful check proves credential acceptance and that metadata read only, not end-to-end synchronization or production readiness.
@@ -87,7 +91,7 @@ These commands send credentials only to the fixed HTTPS Zoho endpoints, print no
 The owner has deferred Sandbox. To inspect the existing grant without new consent or changing `.env`:
 
 ```powershell
-npm --prefix backend run zoho:inspect
+npm run zoho:inspect
 ```
 
 This source-checkout helper refreshes the saved US grant, probes `/crm/v8/org`, then reads only Accounts/Contacts/Deals/Products/Quotes field metadata. It never requests business records, performs a business mutation, selects a dynamic endpoint, connects to MySQL, saves tokens or changes runtime settings. Networking is explicitly enabled only by invoking this command; `ZOHO_NETWORK_DISABLED=1`, debugger settings and extra arguments refuse before private file loading. Help is offline.
@@ -100,6 +104,6 @@ The follow-up inspector additionally checks fixed retained-source candidates `De
 
 ## Safe validation and remaining gates
 
-With a privately prepared approved configuration, the existing `npm --prefix backend run config:check` validates settings without opening a listener/DB connection. It reports source and status, not passwords/tokens/database names. A PASS is configuration-only, not an approval/target/workflow acceptance. This phase uses synthetic test configuration; no real credential file is created.
+With a privately prepared approved configuration, the existing `npm run config:check` validates settings without opening a listener/DB connection. It reports source and status, not passwords/tokens/database names. A PASS is configuration-only, not an approval/target/workflow acceptance. This phase uses synthetic test configuration; no real credential file is created.
 
 Native migrations still use the separate protected operator JSON/profile and authority; this change does not put migration credentials into the API environment. The [manual guide](manual-deployment-guide.md) JSON runtime option remains an alternative. This environment option supersedes earlier statements that MySQL can only use JSON or no Zoho configuration keys are recognized; automatic Zoho synchronization still remains unimplemented. New source/templates invalidate earlier publication/package fingerprints: do not deploy an old candidate expecting these keys. Rebuild/review a new candidate only in the next approved release-preparation phase.

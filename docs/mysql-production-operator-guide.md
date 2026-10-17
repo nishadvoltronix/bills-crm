@@ -1,3 +1,5 @@
+> Current layout: Next.js is at the repository root; Express is in `server/`. Use the root README for install/build/start commands. The preparation checkpoints below are not production acceptance.
+
 # MySQL production operator guide — Ubuntu 24.04
 
 Prepared 2026-10-14. **All server commands below are future owner-operated procedures: NOT RUN.** No server, database, account, grant, credential or private profile was created or changed while preparing this guide. The local SQLite demo is outside its scope. Passing offline tests is not MySQL acceptance, authorization to migrate an existing target, or proof of recoverability.
@@ -8,7 +10,7 @@ Use with the [manual deployment guide](manual-deployment-guide.md) and [staging 
 
 The implemented target is **Oracle MySQL 8.4.11 on the same host as Express**, TCP `127.0.0.1`, port `3306` or `3308`. MySQL-compatible products, other versions, remote hosts, `localhost` socket selection and IPv6 production connections are not accepted. The driver does not implement remote MySQL TLS; never expose its port publicly or redirect this connection through an unreviewed tunnel/proxy.
 
-Production validation in `backend/src/crm/config/mysql.ts` requires:
+Production validation in `server/src/crm/config/mysql.ts` requires:
 
 | Setting | Exact constraint / origin |
 | --- | --- |
@@ -23,13 +25,13 @@ Production validation in `backend/src/crm/config/mysql.ts` requires:
 
 Changing server-wide settings can affect other workloads: inspect them first and obtain host-operator approval. Do not grant `SUPER`, `SYSTEM_USER`, `FILE`, `SET_ANY_DEFINER`, `GRANT OPTION` or broad roles to make a refusal disappear. Account provisioning/password policy, authentication plugin compatibility, DB storage capacity, `max_allowed_packet`, connection limits and backup monitoring require real-host acceptance. The application supports department attachments up to 52,428,800 bytes; packet/memory/backup sizing must account for SQL protocol and hex-dump expansion, not just that raw file size.
 
-Use separate Unix operators where possible. The running API must not be able to read migration, administrator, backup or restore credentials. Run the operator command from a **separate physical copy of the same reviewed backend release**, owned by its operator, with its own private profile. Do not put migration credentials into the service user's readable release tree. Do not use a symlinked `.local-data` directory or private profile to share credentials between releases.
+Use separate Unix operators where possible. The running API must not be able to read migration, administrator, backup or restore credentials. Run the root operator command from a **separate physical copy of the same reviewed single-root release**, owned by its operator, with its own private profile under `server/`. Do not put migration credentials into the service user's readable release tree. Do not use a symlinked `.local-data` directory or private profile to share credentials between releases.
 
 ## 2. Private configuration: exact supported mechanism
 
-The application uses guarded JSON, not `MYSQL_PASSWORD` in a frontend or backend dotenv file. No `NEXT_PUBLIC_*` database setting exists. The uppercase `DATABASE_PROVIDER` / `MYSQL_*` TypeScript parser fields are an internal object contract, not an additional dotenv credential loader.
+This guide describes the guarded JSON configuration option. The API also supports the separately documented [production environment alternative](backend-production-environment.md); never mix both sources. The migration operator still requires its separate private JSON. No `NEXT_PUBLIC_*` database setting exists. The uppercase `DATABASE_PROVIDER` / `MYSQL_*` TypeScript parser fields are an internal object contract, not an additional dotenv credential loader.
 
-Within each selected physical backend package:
+Within `server/` of each selected physical release (paths below are relative to `server/`, not the repository root):
 
 - Runtime profile: `.local-data/operators/mysql-crm-runtime.json`, read by the API; production profile version **2**.
 - Migration profile: `.local-data/operators/mysql-crm-migration.json`, read only by the explicit operator CLI; profile version **1**. It is not accepted as the API runtime profile.
@@ -76,9 +78,9 @@ CRM_RUNTIME_ENABLE=approved-production-mysql-crm-runtime
 CRM_RUNTIME_PROFILE=.local-data/operators/mysql-crm-runtime.json
 ```
 
-`APP_ORIGIN` is an exact canonical HTTPS DNS origin without a path, trailing slash or non-default port. API port is explicit, 1024–65535, and must be free/approved. `CRM_MYSQL_NETWORK_DISABLED=1` vetoes connections; leave it absent only in the separately authorized MySQL process. Do not remove the existing SQLite demo veto or alter its `.env`. The backend dotenv loader permits only its documented seven keys; a service manager may provide them without an actual `.env`. Runtime version 2 has no daily expiry: credential/approval revocation and restart are explicit operator responsibilities. The older local version 1 remains time-bounded and test-fixture-scoped.
+`APP_ORIGIN` is an exact canonical HTTPS DNS origin without a path, trailing slash or non-default port. API port is explicit, 1024–65535, and must be free/approved. `CRM_MYSQL_NETWORK_DISABLED=1` vetoes connections; leave it absent only in the separately authorized MySQL process. Do not remove the existing SQLite demo veto or alter its `.env`. The API dotenv loader permits only its documented supported keys; a service manager may provide them without an actual `server/.env`. See the environment contract for current keys rather than treating this JSON-option selector example as the complete key list. Runtime version 2 has no daily expiry: credential/approval revocation and restart are explicit operator responsibilities. The older local version 1 remains time-bounded and test-fixture-scoped.
 
-Migration template, in the **operator** backend copy:
+Migration template, under `server/` in the **operator** release copy:
 
 ```json
 {
@@ -152,7 +154,7 @@ GRANT SELECT, INSERT, UPDATE, CREATE, ALTER, REFERENCES, TRIGGER
 
 Execute reviewed provisioning SQL only using separately authorized DBA access, never the application identity; direct stdout/stderr to protected receipts as above. No password or actual profile content belongs in reports. If any statement fails, retain partial state and investigate; do not drop/recreate accounts or schemas. No automatic database import or first-user seed is provided. A new empty schema has **no CRM login account**: approved account/data onboarding remains a separate prerequisite, not permission to reuse or reset local demo accounts.
 
-Apply the following runtime grants **after** the versioned tables exist. Each line is part of the exact reviewed map in `backend/src/crm/db/mysql/runtime-privileges.ts`; extra rights and schema-wide runtime grants are refused:
+Apply the following runtime grants **after** the versioned tables exist. Each line is part of the exact reviewed map in `server/src/crm/db/mysql/runtime-privileges.ts`; extra rights and schema-wide runtime grants are refused:
 
 ```sql
 GRANT SELECT, INSERT, UPDATE ON `<OWNER_APPROVED_SCHEMA>`.`users` TO '<OWNER_APPROVED_RUNTIME_USER>'@'127.0.0.1';
@@ -196,14 +198,14 @@ The runtime cannot write the migration ledger or modify/delete immutable audit r
 
 **NOT RUN on a real target.** Before an existing-target migration, establish the approved maintenance/write-freeze window, verified backup and independent restore evidence. Stop only the verified CRM service using the main deployment guide, not unrelated services. Approval must identify this release, exact target, authorized changes, recovery decision-maker and retention of partially committed DDL.
 
-From the canonical operator backend directory, with its separately approved private migration profile and production dependencies installed:
+From the canonical operator release root, with its separately approved private migration profile under `server/` and production dependencies installed once at the root:
 
 ```bash
-cd '<OWNER_APPROVED_OPERATOR_BACKEND_DIRECTORY>'
+cd '<OWNER_APPROVED_OPERATOR_PROJECT_ROOT>'
 npm run mysql:operator -- inspect
 ```
 
-This invokes `node dist/operations/mysql-cli.js inspect`, requires no `tsx`/development dependency, performs identity/direct-grant checks and reports only status plus installed/pending migration counts. It never creates a database or changes application/schema data. It accepts empty, exact-prefix and current lineages; unknown objects, failed `applying` receipts or drift refuse. A missing profile/refused identity is not a reason to copy another environment's credentials. Never use a production profile to test a staging database.
+The root wrapper runs `node dist/operations/mysql-cli.js inspect` inside `server/` (the project-root entry path is `server/dist/operations/mysql-cli.js`), requires no `tsx`/development dependency, performs identity/direct-grant checks and reports only status plus installed/pending migration counts. It never creates a database or changes application/schema data. It accepts empty, exact-prefix and current lineages; unknown objects, failed `applying` receipts or drift refuse. A missing profile/refused identity is not a reason to copy another environment's credentials. Never use a production profile to test a staging database.
 
 After approved preconditions pass:
 

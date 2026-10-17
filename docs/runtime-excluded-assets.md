@@ -1,10 +1,12 @@
+> Current layout: Next.js is at the repository root; Express is in `server/`. Use the root README for install/build/start commands. The preparation checkpoints below are not production acceptance.
+
 # Runtime candidate asset exclusions
 
 **OWNER TO CONFIRM.** All 46 files below remain unchanged in the workspace and are excluded from the separate runtime candidate. Exclusion is not a claim that every asset is unlicensed: rights/private-provisioning approval has not been established for this deliverable. Font notices alone do not approve unrelated company signatures/stamps or original-upload-derived favicon. Do not publish or transfer a directory wholesale. Approve an exact per-file manifest and verify required notice retention, identities and bytes privately before provisioning any asset.
 
 ## Quotation assets: 11 files in each of two directories
 
-Both `backend/assets/quotation-pdf/` and `frontend/assets/quotation-pdf/` contain these exact excluded names:
+Both `server/assets/quotation-pdf/` and `resources/quotation-pdf/` contain these exact excluded names:
 
 ```text
 databg.png
@@ -20,11 +22,11 @@ DejaVuinfo.txt
 README.md
 ```
 
-Native Express PDFs use the backend directory. Frontend copies belong to retained direct-Next compatibility and are not permission to reactivate that production architecture. The READMEs contain internal provenance and should not be provisioned as public assets. Without approved fonts/backgrounds/signature/stamp, quotation PDF acceptance remains BLOCKED; missing files produce a controlled error, not invented replacements.
+Native Express PDFs use `server/assets/quotation-pdf/`. Root `resources/quotation-pdf/` copies belong to retained direct-Next compatibility and are not permission to reactivate that production architecture. Neither directory is the root historical `assets/` tree or public web content. The READMEs contain internal provenance and should not be provisioned as public assets. Without approved fonts/backgrounds/signature/stamp, quotation PDF acceptance remains BLOCKED; missing files produce a controlled error, not invented replacements.
 
 ## Public UI assets: 24 files
 
-These paths are relative to `frontend/public/`:
+These paths are relative to `public/`:
 
 ```text
 legacy/manifest.json

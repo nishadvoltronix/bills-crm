@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { createKnownCredentialDetector, scanCredentialPatterns } from './audit-git-history.mjs';
 import { validateTemplate } from './audit-publication.mjs';
 
-const sourceRoots = ['backend/src', 'frontend/src', 'shared/contracts/src', 'deploy/ubuntu'];
-const fixed = ['backend/package.json', 'backend/package-lock.json', 'backend/tsconfig.json', 'backend/tsconfig.build.json',
-  'backend/.env.example', 'frontend/package.json', 'frontend/package-lock.json', 'frontend/tsconfig.json',
-  'frontend/next.config.ts', 'frontend/.env.example', 'shared/contracts/package.json', 'shared/contracts/package-lock.json',
+const sourceRoots = ['server/src', 'src', 'shared/contracts/src', 'deploy/ubuntu'];
+const fixed = ['package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.server.json', 'tsconfig.server.build.json',
+  'server/.env.example', 'tools/run-local.mjs',
+  'next.config.ts', '.env.example', 'shared/contracts/package.json',
   'shared/contracts/tsconfig.json', 'docs/manual-deployment-guide.md', 'docs/final-release-checklist.md',
   'docs/mysql-production-operator-guide.md', 'docs/runtime-excluded-assets.md', 'docs/staging-acceptance.md',
   'docs/backend-production-environment.md'];
@@ -18,7 +18,7 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 export function safeRuntimePath(name) {
   if (typeof name !== 'string' || !name || isAbsolute(name) || /[\\:\x00-\x1f\x7f]/.test(name)
     || name.split('/').some(part => !part || part === '.' || part === '..' || /[. ]$/.test(part)) || forbidden.test(name)) return false;
-  if (name.split('/').some(part => part.startsWith('.env')) && !['backend/.env.example', 'frontend/.env.example'].includes(name)) return false;
+  if (name.split('/').some(part => part.startsWith('.env')) && !['server/.env.example', '.env.example'].includes(name)) return false;
   return fixed.includes(name) || (sourceRoots.some(root => name.startsWith(root + '/')) && /\.(?:ts|tsx|css|json|service|conf|md|sh|example)$/.test(name));
 }
 
@@ -40,7 +40,7 @@ export function inspectRuntimeBytes(name, bytes, known = () => []) {
   const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   if (/^(?:SQLite format 3|%PDF-|PK\x03\x04)/.test(text) || /^\s*(?:BEGIN TRANSACTION;|CREATE TABLE\s|INSERT INTO\s|-- MySQL dump)/i.test(text)
     || known(bytes).length || scanCredentialPatterns(bytes).length) throw Error('Runtime content check refused.');
-  if (name.endsWith('/.env.example') && validateTemplate(name, bytes).length) throw Error('Runtime environment template refused.');
+  if ((name === '.env.example' || name.endsWith('/.env.example')) && validateTemplate(name, bytes).length) throw Error('Runtime environment template refused.');
   if (name.endsWith('.json')) {
     const value = JSON.parse(text);
     if (value && !Array.isArray(value) && typeof value === 'object'
@@ -65,10 +65,10 @@ function candidates(root) {
 }
 
 function runtimeBytes(name, bytes) {
-  if (!['backend/package.json', 'frontend/package.json'].includes(name)) return bytes;
+  if (name !== 'package.json') return bytes;
   const manifest = JSON.parse(bytes.toString('utf8'));
   // Keep the original dependencies/lockfile graph, but omit unavailable development commands.
-  const keep = name.startsWith('backend') ? ['contracts:build', 'build', 'start', 'mysql:operator'] : ['contracts:build', 'build', 'start'];
+  const keep = ['contracts:build', 'build', 'build:server', 'build:web', 'start', 'start:api:configured', 'mysql:operator'];
   manifest.scripts = Object.fromEntries(keep.filter(key => manifest.scripts[key]).map(key => [key, manifest.scripts[key]]));
   return Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
 }
@@ -98,7 +98,7 @@ export function prepareRuntimePackage(root, known) {
   const manifest = { version: 1, status: 'SOURCE_RUNTIME_CANDIDATE_NOT_PRODUCTION_ACCEPTED', files: entries,
     exclusions: ['All real environment/profile/credential files', 'All databases, uploads, originals, private artifacts, backups and Git history',
       'All PHP, node_modules, generated builds, tests, caches and local demo tooling',
-      'All frontend/public and frontend/backend assets: separate owner licensing/private-asset approval and provisioning required'],
+      'All public and backend assets: separate owner licensing/private-asset approval and provisioning required'],
     limitations: ['Ubuntu dependencies and builds must run on Ubuntu, not copied Windows binaries.',
       'Theme/icon/font/branding/PDF assets are deliberately absent: provision exact approved assets before visual/PDF acceptance.',
       'MySQL, HTTPS host, issuer, recovery and credential remediation remain independent gates; this is not GitHub approval.'] };

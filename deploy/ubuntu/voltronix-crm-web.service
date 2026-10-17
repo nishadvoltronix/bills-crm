@@ -1,7 +1,7 @@
 # MANUAL TEMPLATE ONLY: review the deployment guide and staging evidence first.
 # Install as /etc/systemd/system/voltronix-crm-web.service only after approval.
 # Node 24.x must be installed at /usr/bin/node (verify the actual host path).
-# Before start, create only this release's frontend/.next/cache, owned by
+# Before start, create only this release's .next/cache, owned by
 # voltronix-crm-web, mode 0700. Do not grant write access to the release itself.
 [Unit]
 Description=Voltronix CRM Next.js frontend
@@ -15,12 +15,12 @@ StartLimitBurst=5
 Type=simple
 User=voltronix-crm-web
 Group=voltronix-crm-web
-WorkingDirectory=/srv/voltronix-crm/current/frontend
+WorkingDirectory=/srv/voltronix-crm/current
 Environment=NODE_ENV=production
 Environment=NEXT_TELEMETRY_DISABLED=1
 EnvironmentFile=/etc/voltronix-crm/frontend.env
-ExecStartPre=/usr/bin/test -f /srv/voltronix-crm/current/frontend/.next/BUILD_ID
-ExecStart=/usr/bin/node /srv/voltronix-crm/current/frontend/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3001
+ExecStartPre=/usr/bin/test -f /srv/voltronix-crm/current/.next/BUILD_ID
+ExecStart=/usr/bin/node /srv/voltronix-crm/current/node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3001
 Restart=on-failure
 RestartSec=5
 KillSignal=SIGTERM
@@ -47,8 +47,9 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 CapabilityBoundingSet=
 AmbientCapabilities=
 ReadOnlyPaths=/srv/voltronix-crm/current
-ReadWritePaths=/srv/voltronix-crm/current/frontend/.next/cache
-InaccessiblePaths=-/srv/voltronix-crm/current/backend/.local-data
+ReadWritePaths=/srv/voltronix-crm/current/.next/cache
+InaccessiblePaths=-/srv/voltronix-crm/current/server/.local-data
+InaccessiblePaths=-/srv/voltronix-crm/current/server/.env
 InaccessiblePaths=-/etc/voltronix-crm/backend.env
 StandardOutput=journal
 StandardError=journal

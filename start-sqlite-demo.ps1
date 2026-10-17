@@ -4,7 +4,7 @@ param(
     [ValidateSet('preserve-existing','allow-expired-cleanup')][string]$SessionPolicy
 )
 $ErrorActionPreference = 'Stop'
-$backendPath = Join-Path $PSScriptRoot 'backend'
+$backendPath = Join-Path $PSScriptRoot 'server'
 $commandExitCode = 0
 Push-Location -LiteralPath $backendPath
 try {

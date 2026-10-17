@@ -19,7 +19,8 @@ test('STATIC deployment units isolate backend credentials from the frontend serv
   assert.match(web.section, /^User=voltronix-crm-web$/m);
   assert.match(api.section, /^EnvironmentFile=\/etc\/voltronix-crm\/backend\.env$/m);
   assert.match(web.section, /^EnvironmentFile=\/etc\/voltronix-crm\/frontend\.env$/m);
-  assert.match(web.section, /^InaccessiblePaths=-\/srv\/voltronix-crm\/current\/backend\/\.local-data$/m);
+  assert.match(web.section, /^InaccessiblePaths=-\/srv\/voltronix-crm\/current\/server\/\.local-data$/m);
+  assert.match(web.section, /^InaccessiblePaths=-\/srv\/voltronix-crm\/current\/server\/\.env$/m);
   assert.match(web.section, /^InaccessiblePaths=-\/etc\/voltronix-crm\/backend\.env$/m);
   assert.match(api.section, /^InaccessiblePaths=.*mysql-crm-migration\.json$/m);
   for (const item of [api, web]) {
@@ -32,12 +33,12 @@ test('STATIC deployment units isolate backend credentials from the frontend serv
     assert.match(item.section, /^ReadOnlyPaths=\/srv\/voltronix-crm\/current$/m);
   }
   assert.doesNotMatch(api.section, /^ReadWritePaths=/m);
-  assert.match(web.section, /^ReadWritePaths=\/srv\/voltronix-crm\/current\/frontend\/\.next\/cache$/m);
+  assert.match(web.section, /^ReadWritePaths=\/srv\/voltronix-crm\/current\/\.next\/cache$/m);
 });
 
 test('STATIC service startup uses built Node packages without migration, shell provisioning or PHP', () => {
   const api = service('voltronix-crm-api.service'), web = service('voltronix-crm-web.service');
-  assert.match(api.section, /^ExecStart=\/usr\/bin\/node \/srv\/voltronix-crm\/current\/backend\/dist\/cli\.js$/m);
+  assert.match(api.section, /^ExecStart=\/usr\/bin\/node \/srv\/voltronix-crm\/current\/server\/dist\/cli\.js$/m);
   assert.match(web.section, /^ExecStart=\/usr\/bin\/node .*\/next start --hostname 127\.0\.0\.1 --port 3001$/m);
   for (const item of [api, web]) {
     const commands = item.section.split('\n').filter(line => line.startsWith('Exec'));
@@ -58,6 +59,10 @@ test('STATIC Nginx sends public application traffic only to private Next with no
   }
   assert.doesNotMatch(source, /^\s*proxy_set_header (?:Origin|Cookie|Sec-Fetch-Site|X-CSRF-Token)\s/im);
   assert.match(source, /location \^~ \/api\/v1\/ \{ return 404; \}/);
+  const sourceTreeRule = source.split('\n').find(line => line.includes('server|src|resources|tests|scripts|node_modules'));
+  assert.ok(sourceTreeRule, 'single-root API, source, resources, test/tool and dependency trees stay private');
+  assert.ok(sourceTreeRule.includes('backend|frontend'), 'historical package paths remain denied');
+  assert.ok(sourceTreeRule.includes('{ return 404; }'));
   assert.match(source, /client_max_body_size 52m;/);
   assert.match(source, /proxy_request_buffering off;/);
   assert.match(source, /proxy_buffering off;/);

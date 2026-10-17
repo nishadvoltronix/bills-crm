@@ -95,7 +95,7 @@ server {
 
     location = /api/v1 { return 404; }
     location ^~ /api/v1/ { return 404; }
-    location ~* ^/(backend|frontend|shared|deploy|docs|tools|application|system|vendor|include|assets|uploads|backups)(/|$) { return 404; }
+    location ~* ^/(server|src|resources|tests|scripts|node_modules|backend|frontend|shared|deploy|docs|tools|application|system|vendor|include|assets|uploads|backups)(/|$) { return 404; }
     location ~ (^|/)\. { return 404; }
     location ~* \.(php[0-9]*|phtml|sql|sqlite[0-9]*|db|bak|backup|pem|key|log)$ { return 404; }
 

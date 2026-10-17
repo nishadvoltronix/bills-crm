@@ -24,7 +24,15 @@ export function historicalRelativePath(name) {
   const [first, second] = normalized.split("/");
   if (archivedTrees.has(first) || archivedFiles.has(normalized) || archivedCopies.has(normalized)) return `${legacyArchive}/${normalized}`;
   if (first === "nextjs" && second && ![".local-data", ".private", "backups"].includes(second)
-    && !/^\.env(?:\.|$)/.test(second)) return `frontend/${normalized.slice("nextjs/".length)}`;
+    && !/^\.env(?:\.|$)/.test(second)) {
+    const current = normalized.slice("nextjs/".length);
+    return current.startsWith('assets/quotation-pdf/') ? `resources/${current.slice('assets/'.length)}` : current;
+  }
+  if (first === 'frontend') {
+    const current = normalized.slice('frontend/'.length);
+    return current.startsWith('assets/quotation-pdf/') ? `resources/${current.slice('assets/'.length)}` : current;
+  }
+  if (first === 'backend') return `server/${normalized.slice('backend/'.length)}`;
   return normalized;
 }
 

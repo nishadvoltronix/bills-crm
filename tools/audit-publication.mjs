@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 // placed in the manifest, and unsafe candidates never receive a printed hash.
 const MAX_TEXT_BYTES = 8 * 1024 * 1024;
 const MAX_ASSET_BYTES = 4 * 1024 * 1024;
-const rootFiles = new Set([".editorconfig", "start-local.ps1", "start-sqlite-demo.ps1", "stop-local.ps1"]);
+const rootFiles = new Set([".editorconfig", "start-local.ps1", "start-sqlite-demo.ps1", "stop-local.ps1", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.server.json", "tsconfig.server.build.json", "tsconfig.demo.json", "next.config.ts", "eslint.config.mjs", ".env.example"]);
 const toolFiles = new Set([
   "tools/preservation-paths.mjs", "tools/preservation-paths.d.mts",
   "tools/audit-publication.mjs", "tools/audit-publication.test.mjs",
@@ -19,6 +19,7 @@ const toolFiles = new Set([
   "tools/publication-reviewed-fixtures.json",
   "tools/deployment-templates.test.mjs",
   "tools/prepare-runtime-package.mjs", "tools/prepare-runtime-package.test.mjs",
+  "tools/run-local.mjs", "tools/run-local.test.mjs", "tools/run-suite.mjs",
 ]);
 // Reviewed placeholder deployment templates only; never admit arbitrary server
 // configurations, EnvironmentFile contents, certificates or sibling files.
@@ -37,39 +38,39 @@ const deploymentDocuments = new Set([
 const configNames = new Set(["package.json", "package-lock.json", ".gitignore", "eslint.config.mjs", "next.config.ts", "tsconfig.json", "tsconfig.build.json", "tsconfig.sqlite-demo.json"]);
 const codeExtensions = new Set([".ts", ".tsx", ".mts", ".mjs", ".json", ".css", ".ps1"]);
 const privateSegments = new Set([".git", "node_modules", ".next", "dist", "out", "coverage", "playwright-report", "test-results", ".local-data", ".local-dev", ".private", ".private-legacy", "uploads", "backups", ".credentials", "credentials", "secrets"]);
-const sourceRoots = ["backend/src", "backend/tests", "backend/scripts", "backend/demo-sqlite", "frontend/src", "frontend/tests", "frontend/scripts", "shared/contracts/src"];
-const sources = ["backend", "frontend", "shared/contracts", "tools"];
+const sourceRoots = ["server/src", "server/tests", "server/scripts", "server/demo-sqlite", "src", "tests", "scripts", "shared/contracts/src"];
+const sources = ["server", "src", "tests", "scripts", "public", "resources", "shared/contracts", "tools"];
 const mappings = [
   { source: "docs/PUBLICATION-README.md", target: "README.md" },
   { source: "docs/PUBLICATION.gitignore", target: ".gitignore" },
 ];
 const templates = {
-  "backend/.env.example": {
+  "server/.env.example": {
     CRM_API_ENVIRONMENT: "development", CRM_API_HOST: "127.0.0.1", CRM_API_PORT: "3002", APP_ORIGIN: "http://127.0.0.1:3001",
     CRM_RUNTIME_ENABLE: "", CRM_RUNTIME_PROFILE: "", CRM_MYSQL_NETWORK_DISABLED: "1",
   },
-  "frontend/.env.example": { CRM_FRONTEND_BACKEND: "express", CRM_EXPRESS_ORIGIN: "http://127.0.0.1:3002", APP_ORIGIN: "http://127.0.0.1:3001" },
+  ".env.example": { CRM_FRONTEND_BACKEND: "express", CRM_EXPRESS_ORIGIN: "http://127.0.0.1:3002", APP_ORIGIN: "http://127.0.0.1:3001" },
 };
 
 // Exact passive assets already used publicly by the local UI. An added binary,
 // renamed upload or changed binary is refused, even if its extension looks safe.
 // These are hashes of reviewed distributable assets, never credential hashes.
 const assetHashes = new Map(Object.entries({
-  "frontend/public/legacy/assets/css/plugins/Phosphor.svg": "0c1a7fffebe8e17ef8b60b1c6127e158b0ab4f1a948cd4fa22847a16ceebe77a",
-  "frontend/public/legacy/assets/css/plugins/Phosphor.ttf": "06b91e022b7ee899a63efced879392a74f0bacbda54e4467e9f663220d173a10",
-  "frontend/public/legacy/assets/css/plugins/Phosphor.woff": "396c5eae7f2dfb4d1f5432edd87109eda2f92a451b2167e43a26165b82770f75",
-  "frontend/public/legacy/assets/css/plugins/Phosphor.woff2": "c2ea45ea05ff5c7df1936770c104725f2a68f43fd343f35f3da23a30b27de32a",
-  "frontend/public/legacy/assets/css/plugins/fonts/tabler-icons.ttf": "b0d39c1acb6144884d8dfbd9ec9a40ce36db42dab592e63a187e1ca9bc445969",
-  "frontend/public/legacy/assets/css/plugins/fonts/tabler-icons.woff": "a8b807ca0e7cbb913a28b20e36bb7af1013e1084371b6dc730427179473388dd",
-  "frontend/public/legacy/assets/css/plugins/fonts/tabler-icons.woff2": "7d207e36cd664a55cffcb35e05beda0f761a66cfd79e9553157a1da554ce43ea",
-  "frontend/public/legacy/assets/images/civilgif.gif": "26748c8a3e7e8a2a6e8ce195f38fd6db6645fc6869f20fb8fa7182323a571e3a",
-  "frontend/public/legacy/assets/images/electricgif.gif": "8eeb93f28a20798776d407a16e6db4f3ad22aef0f4e0395cc030391a94a14d3d",
-  "frontend/public/legacy/assets/images/logo-voltronix.png": "1f42753d22d5417639b261e7dde44f3fd507f0d2e72e2b6379910e5afbf76786",
-  "frontend/public/legacy/assets/images/Maintenancemtn.gif": "ea82fe5065f6d1c4068ac91d099bf45b70e9ff39878469bc9b61015b9a019431",
-  "frontend/public/legacy/assets/images/PM.gif": "f8a046fbc3f5aedb34dd34ab487fc5f86994631808aa483c748ae992f389c983",
-  "frontend/public/legacy/assets/images/switchgear.gif": "9eb6b472ef2fa5ced5ca223e407e09f1bdc5b65bac137c2c9ac24441aebead87",
-  "frontend/public/legacy/assets/images/voltronix_logo.png": "ba7fc202e7ea879151fa898c1e791ef2e1e387f87218f831f2462a8c2c4a3fa3",
-  "frontend/public/legacy/assets/images/authentication/img-auth-bg-2.jpg": "4e628d3510fbdfbd7ac1a70f268c657f7285d620fb4350f0ffafa08fde1a6b0b",
+  "public/legacy/assets/css/plugins/Phosphor.svg": "0c1a7fffebe8e17ef8b60b1c6127e158b0ab4f1a948cd4fa22847a16ceebe77a",
+  "public/legacy/assets/css/plugins/Phosphor.ttf": "06b91e022b7ee899a63efced879392a74f0bacbda54e4467e9f663220d173a10",
+  "public/legacy/assets/css/plugins/Phosphor.woff": "396c5eae7f2dfb4d1f5432edd87109eda2f92a451b2167e43a26165b82770f75",
+  "public/legacy/assets/css/plugins/Phosphor.woff2": "c2ea45ea05ff5c7df1936770c104725f2a68f43fd343f35f3da23a30b27de32a",
+  "public/legacy/assets/css/plugins/fonts/tabler-icons.ttf": "b0d39c1acb6144884d8dfbd9ec9a40ce36db42dab592e63a187e1ca9bc445969",
+  "public/legacy/assets/css/plugins/fonts/tabler-icons.woff": "a8b807ca0e7cbb913a28b20e36bb7af1013e1084371b6dc730427179473388dd",
+  "public/legacy/assets/css/plugins/fonts/tabler-icons.woff2": "7d207e36cd664a55cffcb35e05beda0f761a66cfd79e9553157a1da554ce43ea",
+  "public/legacy/assets/images/civilgif.gif": "26748c8a3e7e8a2a6e8ce195f38fd6db6645fc6869f20fb8fa7182323a571e3a",
+  "public/legacy/assets/images/electricgif.gif": "8eeb93f28a20798776d407a16e6db4f3ad22aef0f4e0395cc030391a94a14d3d",
+  "public/legacy/assets/images/logo-voltronix.png": "1f42753d22d5417639b261e7dde44f3fd507f0d2e72e2b6379910e5afbf76786",
+  "public/legacy/assets/images/Maintenancemtn.gif": "ea82fe5065f6d1c4068ac91d099bf45b70e9ff39878469bc9b61015b9a019431",
+  "public/legacy/assets/images/PM.gif": "f8a046fbc3f5aedb34dd34ab487fc5f86994631808aa483c748ae992f389c983",
+  "public/legacy/assets/images/switchgear.gif": "9eb6b472ef2fa5ced5ca223e407e09f1bdc5b65bac137c2c9ac24441aebead87",
+  "public/legacy/assets/images/voltronix_logo.png": "ba7fc202e7ea879151fa898c1e791ef2e1e387f87218f831f2462a8c2c4a3fa3",
+  "public/legacy/assets/images/authentication/img-auth-bg-2.jpg": "4e628d3510fbdfbd7ac1a70f268c657f7285d620fb4350f0ffafa08fde1a6b0b",
 }));
 const fontHashes = {
   "Roboto-Regular.ttf": "92a62766331140ca5bc8bba52028422d276061ad5717c1ac508a118b619c6aec",
@@ -79,13 +80,13 @@ const fontHashes = {
   "Roboto-LICENSE.txt": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
   "DejaVuinfo.txt": "bc9b65c8952e1b2281819c5322adab87c27c330ff7b68434f063b59d219acdaf",
 };
-for (const root of ["frontend", "backend"]) {
-  for (const [name, hash] of Object.entries(fontHashes)) assetHashes.set(`${root}/assets/quotation-pdf/${name}`, hash);
+for (const root of ["resources/quotation-pdf", "server/assets/quotation-pdf"]) {
+  for (const [name, hash] of Object.entries(fontHashes)) assetHashes.set(`${root}/${name}`, hash);
 }
 const themeTexts = new Set([
   "assets/css/hrms.css", "assets/css/style.css", "assets/css/style-preset.css", "assets/css/jquery.dataTables.min.css",
   "assets/css/select2.min.css", "assets/css/plugins/phosphor-icons.css", "assets/css/plugins/tabler-icons.min.css",
-].map(name => `frontend/public/legacy/${name}`));
+].map(name => `public/legacy/${name}`));
 
 export function normalizePublicationPath(name) {
   if (typeof name !== "string" || !name || /[\\:\x00-\x1f\x7f]/.test(name) || isAbsolute(name)) throw new Error("Invalid publication path.");
@@ -99,15 +100,16 @@ export function classifyPublicationPath(name) {
   if (parts.some(part => privateSegments.has(part))) return "private-or-generated-path";
   if (Object.hasOwn(templates, name)) return "template";
   if (parts.some(part => /^\.env(?:\.|$)/.test(part)) || /(?:^|\/)config-templates\//.test(lower)) return "environment-not-approved";
-  if (sources.slice(0, 3).some(root => name.startsWith(`${root}/`) && !name.slice(root.length + 1).includes("/") && configNames.has(name.slice(root.length + 1)))) return "source";
+  if (name.startsWith('shared/contracts/') && !name.slice('shared/contracts/'.length).includes('/') && configNames.has(name.slice('shared/contracts/'.length))) return "source";
+  if (rootFiles.has(name)) return 'source';
   if (/\.(?:php\d*|phtml|phar|sql|sqlite\d*|db|bak|backup|zip|tgz|gz|7z|dump|pem|key|p12|pfx|log)(?:$|[-.])/.test(base)) return "private-or-legacy-file";
   if (deploymentDocuments.has(name)) return "source";
   if (/^(?:nextjs|assets|application|include|system|vendor|docs)\//.test(lower)) return "outside-positive-scope";
   if (rootFiles.has(name) || toolFiles.has(name) || deploymentFiles.has(name)) return "source";
-  if (["frontend/public/legacy/assets/images/favicon_voltronix.png", "frontend/public/legacy/manifest.json"].includes(name)) return "private-original-derived-asset-or-provenance";
+  if (["public/legacy/assets/images/favicon_voltronix.png", "public/legacy/manifest.json"].includes(name)) return "private-original-derived-asset-or-provenance";
   if (assetHashes.has(name)) return "pinned-passive-asset";
   if (themeTexts.has(name)) return "source";
-  if (/^(backend|frontend)\/assets\/quotation-pdf\//.test(name)) return "private-company-pdf-asset";
+  if (/^(?:server\/assets|resources)\/quotation-pdf\//.test(name)) return "private-company-pdf-asset";
   if (sourceRoots.some(root => name.startsWith(`${root}/`)) && codeExtensions.has(extname(name))) {
     if (/\.(?:tsbuildinfo|map)$/.test(name) || /(?:credentials|secrets?|runtime[-_.]?profile|receipt|audit[-_.]?result)\.json$/i.test(base)) return "private-looking-data";
     return "source";
@@ -132,9 +134,9 @@ export function validateTemplate(path, bytes) {
 
 const reviewableCategories = new Set(["literal-password-candidate", "literal-credential-candidate", "credential-bearing-url-candidate", "private-key-material", "environment-credential-candidate"]);
 function fixturePath(path) {
-  return /^(?:backend\/tests\/|frontend\/tests\/)/.test(path)
-    || /^backend\/demo-sqlite\/[^/]+\.test\.ts$/.test(path)
-    || ["frontend/scripts/verify-mysql-offline-http.ts", "tools/audit-git-history.test.mjs", "tools/audit-publication.test.mjs", "tools/prepare-runtime-package.test.mjs"].includes(path);
+  return /^(?:server\/tests\/|tests\/)/.test(path)
+    || /^server\/demo-sqlite\/[^/]+\.test\.ts$/.test(path)
+    || ["scripts/verify-mysql-offline-http.ts", "tools/audit-git-history.test.mjs", "tools/audit-publication.test.mjs", "tools/prepare-runtime-package.test.mjs"].includes(path);
 }
 export function validateReviewedFixtures(records) {
   if (!Array.isArray(records)) throw new Error("Invalid reviewed fixture inventory.");
@@ -273,7 +275,7 @@ export function auditPublication(root, options = {}) {
       if (privateSegments.has(entry.name.toLowerCase())) { increment(excluded, "private-or-generated-subtree"); continue; }
       if (entry.isSymbolicLink()) { rejected.push({ path: child, reasons: ["nonordinary-source-path"] }); continue; }
       if (entry.isDirectory()) {
-        if (/^(?:backend|frontend)\/(?:src|tests|scripts|demo-sqlite|assets|public)(?:\/|$)/.test(child) || child === "shared/contracts/src") walk(child);
+        if (/^(?:server\/(?:src|tests|scripts|demo-sqlite|assets)|src|tests|scripts|public|resources)(?:\/|$)/.test(child) || child === "shared/contracts/src") walk(child);
         else increment(excluded, "outside-positive-subtree");
       } else {
         const kind = classifyPublicationPath(child);

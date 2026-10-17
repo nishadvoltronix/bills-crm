@@ -1,6 +1,10 @@
+> Current layout: Next.js is at the repository root; Express is in `server/`. Use the root README for install/build/start commands. The preparation checkpoints below are not production acceptance.
+
 # Isolated staging acceptance gates
 
 All real-target checks below are **BLOCKED / NOT RUN** until the owner supplies an independently approved empty Oracle MySQL 8.4.11 target, identities and synthetic test scope. Offline tests do not satisfy them. Use the [manual guide](manual-deployment-guide.md) and [MySQL operator guide](mysql-production-operator-guide.md). Never use the preserved demo or production database as the staging fixture.
+
+Use the single-root package and lockfile: dependency installation, `npm run typecheck`, `npm run lint`, `npm test` and `npm run build` all run at the project root. The root README specifies local commands. Passing `npm run dev` or `npm start` proves only the intentionally database-free local startup; API readiness must remain unavailable there. Real staging requires the separately approved configured API entrypoint and distinct Next service environment in the manual guide, not the local foundation launcher.
 
 | Gate | Required evidence |
 | --- | --- |

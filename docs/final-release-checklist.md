@@ -1,10 +1,14 @@
+> Current layout: Next.js is at the repository root; Express is in `server/`. Use the root README for install/build/start commands. The preparation checkpoints below are not production acceptance.
+
 # Final release checklist
 
-Current phase: safe local implementation and manual Ubuntu 24.04 package preparation. **Production cutover and GitHub publication remain BLOCKED.** Detailed local evidence remains in the separately retained repository readiness report. Use [manual deployment](manual-deployment-guide.md), [MySQL operator instructions](mysql-production-operator-guide.md) and [staging acceptance](staging-acceptance.md). This checklist does not authorize any server action.
+Current phase: single-root local refactor and manual Ubuntu 24.04 preparation. **Production cutover remains BLOCKED; this refactor authorizes no new GitHub push or deployment.** Detailed local evidence remains in the root README/refactor report and separately retained readiness records. Use [manual deployment](manual-deployment-guide.md), [MySQL operator instructions](mysql-production-operator-guide.md) and [staging acceptance](staging-acceptance.md). This checklist does not authorize any server action.
 
 **2026-10-15 update:** the owner intends concurrent `crm.voltronix.ae` and `bills.voltronix.ae` use on the existing legacy database. The legacy runtime adapter is not implemented; never apply native migrations to that live schema. Production OAuth setup is complete and org/current-user reads succeed, but independent identity pinning, live workflow acceptance and runtime synchronization remain unfinished. The [consolidated batch checkpoint](crm-readiness-report.md#consolidated-local-integration-batch) supersedes the historical test counts below. Newly added injectable readers/stage/quote/reconciliation components are not production activation. Earlier package fingerprints do not cover these source changes; an old runtime export must not be presented as the new build.
 
-| Gate | Status / evidence required |
+The table below preserves historical preparation evidence, including earlier counts and publication blockers. It is not the final single-root test report or a claim about the status of a previously published private repository. Re-run current root checks for every candidate: one root install, `npm run typecheck`, `npm run lint`, `npm test` and `npm run build`. `npm start` is only the no-database local build launcher, not production activation.
+
+| Gate | Historical status / evidence required |
 | --- | --- |
 | HTTPS-aware Next/Express configuration/cookies, issuer delivery, native MySQL operator and readiness | Local implementation completed; full offline suites passed. Actual HTTPS/MySQL acceptance remains separate. |
 | Backend tests / SQLite tests | **VERIFIED PASS:** 549/549 backend; 142/142 SQLite. |
