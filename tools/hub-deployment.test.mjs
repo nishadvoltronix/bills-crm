@@ -426,7 +426,7 @@ test("the user-manager alternative uses the actual host executables and the same
   for (const directive of ["Type=oneshot", "WorkingDirectory=/home/rjpmadmin/voltronix-hub-deployment/source",
     "Environment=HUB_NODE_BIN=/usr/bin/node", "Environment=HUB_PM2_BIN=/usr/lib/node_modules/pm2/bin/pm2",
     "Environment=PM2_HOME=/home/rjpmadmin/.pm2", "ExecStart=/bin/bash /home/rjpmadmin/hub-deploy/hub-deploy.sh",
-    "NoNewPrivileges=true", "PrivateTmp=true", "Nice=10", "UMask=0077", "StandardOutput=journal", "StandardError=journal"]) {
+    "NoNewPrivileges=true", "PrivateTmp=false", "Nice=10", "UMask=0077", "StandardOutput=journal", "StandardError=journal"]) {
     assert.ok(unit.split(/\r?\n/).includes(directive), directive);
   }
   assert.match(timer, /^Unit=hub-deploy\.service$/m);

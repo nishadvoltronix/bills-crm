@@ -28,7 +28,9 @@ TimeoutStopSec=180
 KillMode=mixed
 UMask=0077
 NoNewPrivileges=true
-PrivateTmp=true
+# PrivateTmp would hide root ownership behind an unprivileged user namespace;
+# the controller must inspect host executable ownership. Its state stays private.
+PrivateTmp=false
 Nice=10
 StandardOutput=journal
 StandardError=journal
