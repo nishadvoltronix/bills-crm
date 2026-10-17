@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { localEnvironment, localPorts, projectRoot, serverCommand } from './run-local.mjs';
+import { assertLocalStartupEnvironment, localEnvironment, localPorts, projectRoot, serverCommand } from './run-local.mjs';
 
 test('root local launcher chooses distinct loopback defaults and validates explicit ports', () => {
   assert.deepEqual(localPorts([]), { web: 3001, api: 3002 });
@@ -19,6 +19,35 @@ test('local child environment removes inherited database, integrations and publi
   assert.equal(result.APP_ORIGIN, 'http://127.0.0.1:3001'); assert.equal(result.CRM_MYSQL_NETWORK_DISABLED, '1');
   assert.equal(result.ZOHO_ENABLED, 'false');
   for (const key of ['CRM_RUNTIME_ENABLE', 'CRM_MYSQL_PASSWORD', 'ZOHO_REFRESH_TOKEN', 'NEXT_PUBLIC_TEST', 'NODE_OPTIONS']) assert.equal(result[key], undefined);
+});
+
+test('local startup cannot silently discard Bills mode or HTTPS origin while test wrappers remain usable', () => {
+  const commands = ['dev', 'start', 'web:dev', 'web:start', 'api:foundation', 'api:foundation-dev'];
+  for (const command of commands) {
+    assert.doesNotThrow(() => assertLocalStartupEnvironment(command, {}));
+    assert.doesNotThrow(() => assertLocalStartupEnvironment(command, { APP_ORIGIN: 'http://127.0.0.1:3001' }));
+    for (const values of [{ CRM_DATABASE_MODE: 'disabled' }, { CRM_DATABASE_MODE: 'legacy' }, { CRM_DATABASE_MODE: '' },
+      { APP_ORIGIN: 'https://bills.example.invalid' }, { NODE_ENV: 'production' }, { CRM_API_ENVIRONMENT: 'production' }]) {
+      assert.throws(() => assertLocalStartupEnvironment(command, values), /tools\/run-bills\.mjs/);
+      for (const testCommand of ['test:server', 'test:demo', 'test:mysql-auth:offline', 'server:script', 'build']) {
+        assert.doesNotThrow(() => assertLocalStartupEnvironment(testCommand, values));
+      }
+    }
+  }
+});
+
+test('executable local launcher refuses production settings before a child or listener starts', () => {
+  for (const command of ['dev', 'web:start', 'api:foundation-dev']) {
+    for (const values of [{ CRM_DATABASE_MODE: 'disabled' }, { APP_ORIGIN: 'https://bills.example.invalid' },
+      { NODE_ENV: 'production' }, { CRM_API_ENVIRONMENT: 'production' }]) {
+      const result = spawnSync(process.execPath, [fileURLToPath(new URL('./run-local.mjs', import.meta.url)), command], {
+        cwd: projectRoot, env: { ...localEnvironment(process.env, localPorts([])), ...values },
+        windowsHide: true, encoding: 'utf8', timeout: 10_000,
+      });
+      assert.equal(result.error, undefined); assert.equal(result.status, 1); assert.equal(result.stdout, '');
+      assert.match(result.stderr, /tools\/run-bills\.mjs/); assert.equal(result.stderr.includes('listening'), false);
+    }
+  }
 });
 
 test('server suites retain isolated cwd without requiring a server package or shell', () => {

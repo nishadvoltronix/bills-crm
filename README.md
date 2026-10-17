@@ -18,7 +18,11 @@ Default startup deliberately selects no database, reads no private `server/.env`
 
 ## Configuration and checks
 
-Only the root and `server/.env.example` are safe configuration templates. Real environments, profiles and credentials must remain private. The root template contains server-only Next-to-Express bridge settings, never browser-public credentials. Do not enable Zoho synchronization or use database/operator commands as part of default startup.
+Four reviewed environment templates exist: the root and `server/.env.example` for older local/native workflows, and separate `deploy/ubuntu/bills-web.env.example` and `deploy/ubuntu/bills-api.env.example` for the HTTPS Bills foundation. Real environments, profiles and credentials must remain private and outside the Bills release. Bridge settings are server-only, never browser-public credentials. Do not enable Zoho synchronization or use database/operator commands as part of default startup.
+
+For `https://bills.voltronix.ae`, use the [manual deployment guide](docs/manual-deployment-guide.md) and `npm run bills:build`, `bills:check:api`, `bills:check:web`, `bills:start:api`, and `bills:start:web` with their explicitly loaded service environments. These commands require database access disabled and a matching API identity; they have no implicit ports or demo fallback. Example ports 3301/3302 require manual availability checks. The local default commands above are not the HTTPS deployment entry points.
+
+The [legacy compatibility audit](docs/legacy-production-compatibility.md) records why the native MySQL adapter cannot be pointed at historical PHP tables. No legacy runtime adapter is implemented. Historical schema, authentication, ownership and business rules need authoritative offline evidence before activation can be designed.
 
 ```sh
 npm run lint
@@ -29,6 +33,6 @@ Tests and operational tooling are retained in the source, but some suites requir
 
 ## Scope and remaining work
 
-The application implements dashboard/pipeline, products/deals, quotations/PDFs, jobs/departments, reports/exports and users/permissions. Real authenticated workflows require persistence and acceptance. Shared-MySQL schema compatibility, live Zoho runtime/synchronization, file reconciliation, deployment/TLS/origins, backup/recovery and concurrency acceptance remain unfinished.
+The application implements dashboard/pipeline, products/deals, quotations/PDFs, jobs/departments, reports/exports and users/permissions. Real authenticated workflows require persistence and acceptance. HTTPS configuration, isolated listener checks and Bills-specific service/Nginx templates are prepared locally; deployment, certificate/DNS validation, shared-MySQL compatibility, live Zoho synchronization, file reconciliation, backup/recovery and concurrency acceptance remain unfinished.
 
 Only selected public UI assets and font files/notices are included. Company PDF backgrounds, signatures and stamps, customer uploads, the original-upload-derived favicon and internal asset provenance are excluded. No new application redistribution license or asset-rights determination is made by this source publication. Deployment templates are reference material only; pushing source does not deploy services or authorize database operations.

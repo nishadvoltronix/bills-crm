@@ -1,4 +1,4 @@
-> Current layout: Next.js is at the repository root; Express is in `server/`. Use the root README for install/build/start commands. The preparation checkpoints below are not production acceptance.
+> Historical native-schema procedure only. This guide does NOT apply to the existing Bills/PHP database or the database-disabled Bills deployment. Never run its migrations, grants or activation steps against historical CRM data. The current [Bills runbook](manual-deployment-guide.md) supersedes deployment instructions here; [legacy compatibility](legacy-production-compatibility.md) remains blocked.
 
 # MySQL production operator guide — Ubuntu 24.04
 

@@ -19,14 +19,18 @@ const toolFiles = new Set([
   "tools/publication-reviewed-fixtures.json",
   "tools/deployment-templates.test.mjs",
   "tools/prepare-runtime-package.mjs", "tools/prepare-runtime-package.test.mjs",
+  "tools/prepare-bills-package.mjs", "tools/prepare-bills-package.test.mjs",
+  "tools/run-bills.mjs", "tools/run-bills.test.mjs",
+  "tools/bills-foundation-smoke.mjs",
   "tools/run-local.mjs", "tools/run-local.test.mjs", "tools/run-suite.mjs",
 ]);
 // Reviewed placeholder deployment templates only; never admit arbitrary server
 // configurations, EnvironmentFile contents, certificates or sibling files.
 const deploymentFiles = new Set([
   "deploy/ubuntu/nginx.conf.example",
-  "deploy/ubuntu/voltronix-crm-api.service",
-  "deploy/ubuntu/voltronix-crm-web.service",
+  "deploy/ubuntu/bills-crm-api.service",
+  "deploy/ubuntu/bills-crm-web.service",
+  "deploy/ubuntu/bills-web.env.example", "deploy/ubuntu/bills-api.env.example",
 ]);
 // Operational instructions contain placeholders, not actual target profiles or
 // evidence. Other internal readiness reports and private handoffs stay excluded.
@@ -34,6 +38,7 @@ const deploymentDocuments = new Set([
   "docs/manual-deployment-guide.md", "docs/final-release-checklist.md",
   "docs/mysql-production-operator-guide.md", "docs/runtime-excluded-assets.md",
   "docs/staging-acceptance.md", "docs/backend-production-environment.md",
+  "docs/legacy-production-compatibility.md", "docs/production-preparation-report.md",
 ]);
 const configNames = new Set(["package.json", "package-lock.json", ".gitignore", "eslint.config.mjs", "next.config.ts", "tsconfig.json", "tsconfig.build.json", "tsconfig.sqlite-demo.json"]);
 const codeExtensions = new Set([".ts", ".tsx", ".mts", ".mjs", ".json", ".css", ".ps1"]);
@@ -50,6 +55,16 @@ const templates = {
     CRM_RUNTIME_ENABLE: "", CRM_RUNTIME_PROFILE: "", CRM_MYSQL_NETWORK_DISABLED: "1",
   },
   ".env.example": { CRM_FRONTEND_BACKEND: "express", CRM_EXPRESS_ORIGIN: "http://127.0.0.1:3002", APP_ORIGIN: "http://127.0.0.1:3001" },
+  "deploy/ubuntu/bills-web.env.example": {
+    NODE_ENV: "production", APP_ORIGIN: "https://bills.voltronix.ae", CRM_API_INSTANCE_ID: "bills-crm",
+    CRM_DATABASE_MODE: "disabled", CRM_MYSQL_NETWORK_DISABLED: "1", ZOHO_ENABLED: "false", NEXT_TELEMETRY_DISABLED: "1",
+    CRM_WEB_HOST: "127.0.0.1", CRM_WEB_PORT: "3301", CRM_FRONTEND_BACKEND: "express", CRM_EXPRESS_ORIGIN: "http://127.0.0.1:3302",
+  },
+  "deploy/ubuntu/bills-api.env.example": {
+    NODE_ENV: "production", APP_ORIGIN: "https://bills.voltronix.ae", CRM_API_INSTANCE_ID: "bills-crm",
+    CRM_DATABASE_MODE: "disabled", CRM_MYSQL_NETWORK_DISABLED: "1", ZOHO_ENABLED: "false", NEXT_TELEMETRY_DISABLED: "1",
+    CRM_API_ENVIRONMENT: "production", CRM_API_HOST: "127.0.0.1", CRM_API_PORT: "3302",
+  },
 };
 
 // Exact passive assets already used publicly by the local UI. An added binary,
@@ -87,6 +102,10 @@ const themeTexts = new Set([
   "assets/css/hrms.css", "assets/css/style.css", "assets/css/style-preset.css", "assets/css/jquery.dataTables.min.css",
   "assets/css/select2.min.css", "assets/css/plugins/phosphor-icons.css", "assets/css/plugins/tabler-icons.min.css",
 ].map(name => `public/legacy/${name}`));
+
+// Only the existing reviewed passive assets; callers cannot change their pins.
+export const reviewedPassiveAssetPaths = Object.freeze([...assetHashes.keys()].sort());
+export const reviewedThemeTextPaths = Object.freeze([...themeTexts].sort());
 
 export function normalizePublicationPath(name) {
   if (typeof name !== "string" || !name || /[\\:\x00-\x1f\x7f]/.test(name) || isAbsolute(name)) throw new Error("Invalid publication path.");
@@ -136,7 +155,9 @@ const reviewableCategories = new Set(["literal-password-candidate", "literal-cre
 function fixturePath(path) {
   return /^(?:server\/tests\/|tests\/)/.test(path)
     || /^server\/demo-sqlite\/[^/]+\.test\.ts$/.test(path)
-    || ["scripts/verify-mysql-offline-http.ts", "tools/audit-git-history.test.mjs", "tools/audit-publication.test.mjs", "tools/prepare-runtime-package.test.mjs"].includes(path);
+    || ["scripts/verify-mysql-offline-http.ts", "tools/audit-git-history.test.mjs", "tools/audit-publication.test.mjs", "tools/prepare-runtime-package.test.mjs",
+      "tools/prepare-bills-package.test.mjs", "tools/run-bills.test.mjs", "tools/run-local.test.mjs", "tools/deployment-templates.test.mjs",
+      "tools/bills-foundation-smoke.mjs"].includes(path);
 }
 export function validateReviewedFixtures(records) {
   if (!Array.isArray(records)) throw new Error("Invalid reviewed fixture inventory.");

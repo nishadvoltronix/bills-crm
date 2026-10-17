@@ -35,6 +35,7 @@ test("OFFLINE production API requires canonical HTTPS DNS origin and never opens
     assert.throws(() => loadConfig({ ...settings, APP_ORIGIN: origin }), ConfigurationError);
   }
   for (const host of ["0.0.0.0", "::", "localhost"]) assert.throws(() => loadConfig({ ...settings, CRM_API_HOST: host }), ConfigurationError);
+  assert.equal(loadConfig({ ...settings, CRM_API_HOST: "::1" }).host, "::1");
   for (const mode of ["development", "test", "staging"]) {
     assert.throws(() => loadConfig({ ...settings, CRM_API_ENVIRONMENT: mode }), ConfigurationError);
   }

@@ -1,5 +1,12 @@
 [
   {
+    "path": "scripts/verify-mysql-offline-http.ts",
+    "sha256": "64c5ff86543b1bb5243ec8fcb5dd6e314841d3742ea3328f7ff9bbd8c82fb8fb",
+    "categories": [
+      "literal-password-candidate"
+    ]
+  },
+  {
     "path": "server/demo-sqlite/anonymous-browser.test.ts",
     "sha256": "6c16c94ec0478f447fd26c17f3e82db0d90d1a302553f52f1b6c6e5930867eda",
     "categories": [
@@ -291,14 +298,14 @@
   },
   {
     "path": "server/tests/production-runtime.test.ts",
-    "sha256": "197469999b894803021cdb295799e224eca6e1bc94dfd5f4912eb6cf0e8f5443",
+    "sha256": "a72c3193e388fc8326d1e7b9342ea4bfefb172f454d6b58634129bafc5a2e5c1",
     "categories": [
       "literal-password-candidate"
     ]
   },
   {
     "path": "server/tests/runtime-configuration.test.ts",
-    "sha256": "e988f597abd8287dbd5c8b5b5f545de4a846d3cf5fe3760a9edeedefb40ad056",
+    "sha256": "002ab2300e51668a2f43e62e30dcc20968a905147c3a73826c8870a7319a5346",
     "categories": [
       "literal-password-candidate"
     ]
@@ -388,13 +395,6 @@
     ]
   },
   {
-    "path": "scripts/verify-mysql-offline-http.ts",
-    "sha256": "64c5ff86543b1bb5243ec8fcb5dd6e314841d3742ea3328f7ff9bbd8c82fb8fb",
-    "categories": [
-      "literal-password-candidate"
-    ]
-  },
-  {
     "path": "tests/attachments.test.ts",
     "sha256": "1e09134eb2d8f49a6a2fb41a67fd69cb70fea4047294354d5d7f29ee14d6ef1d",
     "categories": [
@@ -460,7 +460,14 @@
   },
   {
     "path": "tests/express-https.test.ts",
-    "sha256": "9b5cdced5c01c7d742d4f2a5854268b224fc9250b81792b0825445f555b9c7a7",
+    "sha256": "7eb07e1292ef75e9adfcafe880ce08225431a39065153d975e6702bb8ce4334b",
+    "categories": [
+      "literal-password-candidate"
+    ]
+  },
+  {
+    "path": "tests/express-identity.test.ts",
+    "sha256": "1a1dddab06b0c8987e505bc02cb918fe43c51ea48f6885b2f55fc23169ebaf3e",
     "categories": [
       "literal-password-candidate"
     ]
@@ -596,9 +603,24 @@
   },
   {
     "path": "tools/audit-publication.test.mjs",
-    "sha256": "273eac653ae1cdf4ea298fa816674d79f799df33263dedad118977b218e8205c",
+    "sha256": "3e3af6ed3414b2e28ad16ab4eadc32546531bdaf03b896ea71d582322c92b484",
     "categories": [
       "literal-password-candidate"
+    ]
+  },
+  {
+    "path": "tools/bills-foundation-smoke.mjs",
+    "sha256": "3a80e7470c980f114598cc3eb1ba9f3cb276f3a9c032c65105a7e0b347b5cb0b",
+    "categories": [
+      "literal-password-candidate"
+    ]
+  },
+  {
+    "path": "tools/prepare-bills-package.test.mjs",
+    "sha256": "9735883b438931687f48bd476ffe93b25cff7910b815bf060f4721bd161bb5d0",
+    "categories": [
+      "literal-password-candidate",
+      "private-key-material"
     ]
   },
   {
@@ -606,6 +628,13 @@
     "sha256": "761e22ee2df5bff6211440f75e1c7f945a73d2f236647f4818d5ca5ae5a83085",
     "categories": [
       "literal-password-candidate"
+    ]
+  },
+  {
+    "path": "tools/run-bills.test.mjs",
+    "sha256": "0f66f96faa292ae66484a2e1cf48025f15b80c8ddb164ed6fe08d1dbc07a24fb",
+    "categories": [
+      "credential-bearing-url-candidate"
     ]
   }
 ]

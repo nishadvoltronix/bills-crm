@@ -4,7 +4,7 @@ import { createServer, request, type RequestOptions, type Server } from "node:ht
 import type { AddressInfo } from "node:net";
 import { after, before, test } from "node:test";
 import express from "express";
-import { LIVENESS_PATH } from "@voltronix/crm-contracts";
+import { API_IDENTITY_PATH, API_SERVICE_ID, LIVENESS_PATH } from "@voltronix/crm-contracts";
 import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { errorHandler, SafeHttpError } from "../src/http/errors.js";
@@ -88,6 +88,37 @@ test("foundation-only liveness never implies database readiness or changes authe
   assert.equal(result.headers["cache-control"], "no-store");
   assert.equal(result.headers["set-cookie"], undefined);
   assert.equal((await call(LIVENESS_PATH)).status, 200);
+});
+
+test("unconfigured instance identity refuses without a database or authentication side effect", async () => {
+  const result = await call(API_IDENTITY_PATH);
+  assert.equal(result.status, 503); assert.equal(result.headers["set-cookie"], undefined);
+  assert.equal(result.headers["cache-control"], "no-store");
+});
+
+test("configured identity is GET-only static configuration, independent of database readiness and request host", async () => {
+  let readinessCalls = 0;
+  const identityConfig = loadConfig({ CRM_API_ENVIRONMENT: "production", CRM_API_HOST: "127.0.0.1",
+    CRM_API_PORT: "3902", CRM_API_INSTANCE_ID: "bills-crm", APP_ORIGIN: "https://bills.example.invalid" });
+  const identityServer = createServer(createApp(identityConfig, { readiness: async () => { readinessCalls++; return false; } }));
+  const identityLifecycle = createHttpLifecycle(identityServer);
+  identityServer.listen(0, "127.0.0.1"); await once(identityServer, "listening");
+  try {
+    const result = await call(API_IDENTITY_PATH, { headers: { host: "another.example.invalid", "x-forwarded-host": "another.example.invalid" } }, undefined, identityServer);
+    assert.equal(result.status, 200);
+    assert.deepEqual(JSON.parse(result.body), { service: API_SERVICE_ID, instanceId: "bills-crm", appOrigin: identityConfig.appOrigin });
+    assert.equal(result.headers["set-cookie"], undefined); assert.equal(result.headers["cache-control"], "no-store");
+    for (const method of ["HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      const denied = await call(API_IDENTITY_PATH, { method }, undefined, identityServer);
+      assert.equal(denied.status, 405); assert.equal(denied.headers.allow, "GET");
+    }
+    assert.equal((await call(API_IDENTITY_PATH + "?secret=synthetic", {}, undefined, identityServer)).status, 400);
+    assert.equal((await call(API_IDENTITY_PATH, { headers: { "content-length": "4" } }, "test", identityServer)).status, 400);
+    assert.equal(readinessCalls, 0);
+    assert.equal((await call("/api/v1/health/ready", {}, undefined, identityServer)).status, 503);
+    assert.equal((await call("/api/v1/auth/me", {}, undefined, identityServer)).status, 503);
+    assert.equal(readinessCalls, 1);
+  } finally { await identityLifecycle.stop(); }
 });
 
 test("liveness rejects queries, GET bodies and chunked bodies before body parsing", async () => {

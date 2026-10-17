@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { mysqlEnvironmentKeys, zohoEnvironmentKeys } from "./runtime/environment-settings.js";
 import { assertPrivateAccess } from "./runtime/private-profile.js";
 
-const supportedKeys = new Set(["CRM_API_ENVIRONMENT", "CRM_API_HOST", "CRM_API_PORT", "APP_ORIGIN",
+const supportedKeys = new Set(["CRM_API_ENVIRONMENT", "CRM_API_HOST", "CRM_API_PORT", "CRM_API_INSTANCE_ID", "APP_ORIGIN", "CRM_DATABASE_MODE",
   "CRM_RUNTIME_ENABLE", "CRM_RUNTIME_PROFILE", "CRM_RUNTIME_SOURCE", "CRM_MYSQL_NETWORK_DISABLED",
   ...mysqlEnvironmentKeys, ...zohoEnvironmentKeys]);
 const optionalKeys = new Set(["CRM_RUNTIME_ENABLE", "CRM_RUNTIME_PROFILE", "CRM_RUNTIME_SOURCE", "CRM_MYSQL_NETWORK_DISABLED",
@@ -38,6 +38,9 @@ export function parseBackendEnvironment(source: string): Readonly<Record<string,
       validated[key] = value;
     }
     if (validated.CRM_MYSQL_NETWORK_DISABLED !== undefined && validated.CRM_MYSQL_NETWORK_DISABLED !== "1") throw new Error();
+    if (validated.CRM_API_INSTANCE_ID !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(validated.CRM_API_INSTANCE_ID)) throw new Error();
+    // Explicit Bills modes cannot be dropped as blank selectors or activate the native adapter.
+    isMysqlRuntimeSelected(validated);
     return Object.freeze(validated);
   } catch { throw new EnvironmentFileError(); }
 }
@@ -88,6 +91,15 @@ export function loadBackendEnvironment(environment: Record<string, string | unde
 }
 
 export function isMysqlRuntimeSelected(environment: Readonly<Record<string, string | undefined>>): boolean {
+  if (environment.CRM_DATABASE_MODE !== undefined) {
+    if (environment.CRM_DATABASE_MODE !== "disabled"
+      || (environment.CRM_MYSQL_NETWORK_DISABLED !== undefined && environment.CRM_MYSQL_NETWORK_DISABLED !== "1")
+      || Object.entries(environment).some(([key, value]) => value?.trim()
+        && (key.startsWith("CRM_RUNTIME_") || (key.startsWith("CRM_MYSQL_") && key !== "CRM_MYSQL_NETWORK_DISABLED")))) {
+      throw new EnvironmentFileError();
+    }
+    return false;
+  }
   return Boolean(environment.CRM_RUNTIME_ENABLE?.trim() || environment.CRM_RUNTIME_PROFILE?.trim()
     || environment.CRM_RUNTIME_SOURCE?.trim() || mysqlEnvironmentKeys.some(key => environment[key]?.trim()));
 }
