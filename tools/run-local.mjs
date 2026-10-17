@@ -8,6 +8,14 @@ const serverRoot = resolve(projectRoot, 'server');
 const nextCli = resolve(projectRoot, 'node_modules/next/dist/bin/next');
 const self = fileURLToPath(import.meta.url);
 
+export function assertLocalStartupEnvironment(command, environment) {
+  if (['dev', 'start', 'web:dev', 'web:start', 'api:foundation', 'api:foundation-dev'].includes(command)
+    && (environment.CRM_DATABASE_MODE !== undefined || environment.NODE_ENV === 'production'
+      || environment.CRM_API_ENVIRONMENT === 'production' || /^https:/i.test(environment.APP_ORIGIN?.trim() ?? ''))) {
+    throw Error('Bills production settings require tools/run-bills.mjs; local startup cannot discard them.');
+  }
+}
+
 export function localPorts(args) {
   const result = { web: 3001, api: 3002 };
   const seen = new Set();
@@ -108,6 +116,7 @@ async function foundation(command, ports) {
 }
 
 export async function main(command, args) {
+  assertLocalStartupEnvironment(command, process.env);
   const explicit = serverCommand(command, args);
   if (explicit) return runChildren([explicit]);
   const ports = localPorts(args);
@@ -129,7 +138,7 @@ export async function main(command, args) {
 
 if (process.argv[1] && resolve(process.argv[1]) === self) {
   main(process.argv[2], process.argv.slice(3)).then(code => { if (code) process.exitCode = code; }).catch(() => {
-    console.error('Local command failed. Check the requested command, ports, dependencies and build. No automatic database setup or unrelated process cleanup was attempted.');
+    console.error('Local command failed. Check the requested command, ports, dependencies and build. For Bills production settings use tools/run-bills.mjs. No automatic database setup or unrelated process cleanup was attempted.');
     process.exitCode = 1;
   });
 }

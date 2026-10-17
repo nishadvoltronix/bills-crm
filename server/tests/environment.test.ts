@@ -35,6 +35,33 @@ test("blank optional selectors do not implicitly enable MySQL; explicit selector
   assert.equal(isMysqlRuntimeSelected({ CRM_RUNTIME_ENABLE: "incorrect-nonempty-value" }), true);
 });
 
+test("Bills disabled database mode parses explicitly and never selects the native runtime", () => {
+  const values = parseBackendEnvironment(settings + "CRM_DATABASE_MODE=disabled\nCRM_API_INSTANCE_ID=bills-crm\nCRM_MYSQL_NETWORK_DISABLED=1\n");
+  assert.equal(values.CRM_DATABASE_MODE, "disabled"); assert.equal(values.CRM_API_INSTANCE_ID, "bills-crm");
+  assert.equal(loadConfig(values).instanceId, "bills-crm"); assert.equal(isMysqlRuntimeSelected(values), false);
+  assert.equal(isMysqlRuntimeSelected({ CRM_DATABASE_MODE: "disabled", CRM_RUNTIME_ENABLE: "", CRM_RUNTIME_PROFILE: " " }), false);
+  for (const mode of ["legacy", "mysql", "", " ", "DISABLED"]) {
+    assert.throws(() => isMysqlRuntimeSelected({ CRM_DATABASE_MODE: mode }), redacted);
+    assert.throws(() => parseBackendEnvironment(`CRM_DATABASE_MODE='${mode}'\n`), redacted);
+  }
+  for (const id of ["", "BILLS", "with space", "x".repeat(65)]) {
+    assert.throws(() => parseBackendEnvironment(`CRM_API_INSTANCE_ID='${id}'\n`), redacted);
+  }
+});
+
+test("Bills disabled mode refuses native credentials and selectors instead of silently ignoring them", () => {
+  for (const key of ["CRM_RUNTIME_ENABLE", "CRM_RUNTIME_PROFILE", "CRM_RUNTIME_SOURCE", "CRM_MYSQL_HOST", "CRM_MYSQL_PORT",
+    "CRM_MYSQL_DATABASE", "CRM_MYSQL_USER", "CRM_MYSQL_PASSWORD", "CRM_MYSQL_SERVER_UUID", "CRM_MYSQL_APPROVED"]) {
+    const values = { CRM_DATABASE_MODE: "disabled", [key]: "synthetic-secret-marker" };
+    assert.throws(() => isMysqlRuntimeSelected(values), redacted);
+    assert.throws(() => parseBackendEnvironment(`CRM_DATABASE_MODE=disabled\n${key}=synthetic-secret-marker\n`), redacted);
+  }
+  for (const key of ["CRM_RUNTIME_UNKNOWN", "CRM_MYSQL_UNKNOWN"]) {
+    assert.throws(() => isMysqlRuntimeSelected({ CRM_DATABASE_MODE: "disabled", [key]: "synthetic-secret-marker" }), redacted);
+  }
+  assert.throws(() => isMysqlRuntimeSelected({ CRM_DATABASE_MODE: "disabled", CRM_MYSQL_NETWORK_DISABLED: "0" }), redacted);
+});
+
 for (const [label, content] of [
   ["duplicate", `${settings}CRM_API_PORT=3003`],
   ["unknown", "MYSQL_PASSWORD=synthetic-secret-marker"],

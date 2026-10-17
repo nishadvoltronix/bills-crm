@@ -1,260 +1,270 @@
-> Current layout: Next.js is at the repository root; Express is in `server/`. Use the root README for install/build/start commands. The preparation checkpoints below are not production acceptance.
+# Manual Bills CRM deployment and rollback
 
-# Manual Ubuntu 24.04 deployment — Voltronix CRM
+**Future owner-operated instructions only. None of these server commands was run. No server, production database, DNS service or live website was contacted.** This is an isolated database-disabled foundation, not approval to publish a working CRM. Existing `crm.voltronix.ae`, PHP source, ten-year database, uploads, sessions and backups must remain unchanged. Database compatibility and production cutover remain blocked by the [release checklist](final-release-checklist.md).
 
-**Future owner-operated procedure, not deployment approval.** No server, provider, DNS, firewall or production database was contacted while preparing this guide. Every Ubuntu/MySQL/Nginx/systemd/TLS/backup command here is **NOT RUN on the target**. Complete isolated staging acceptance and the [final release checklist](final-release-checklist.md) before production cutover. The existing Windows SQLite demo must not be converted, reset, imported or used as a test account source.
+The target layout uses one project directory and one dependency installation:
 
-Selected architecture: **Nginx HTTPS → Next.js on 127.0.0.1:3001 → Express on 127.0.0.1:3002 → co-located Oracle MySQL 8.4.11 on 127.0.0.1:3306 or 3308**. Process manager: **systemd only**, with separate API/web Unix users. PHP is not a runtime dependency. This first production contract deliberately does not support remote MySQL; do not substitute a managed database or disable TLS requirements to make a remote connection work. A remote DB requires a separately implemented and accepted TLS/identity contract.
+```text
+/var/www/bills.voltronix_ae/          existing directory: preserve all contents
+  runtime/node/                     NEW app-local, verified Node 24.x
+  bills-releases/<release-id>/       NEW immutable release; never overlay
+  bills-current -> bills-releases/<release-id>  NEW Bills-only symlink
+/etc/bills-crm/frontend.env          NEW web configuration, root:root 0600
+/etc/bills-crm/backend.env           NEW API configuration, root:root 0600
+```
 
-**2026-10-15 shared-database override:** the owner now wants both `crm.voltronix.ae` and `bills.voltronix.ae` using the existing legacy database concurrently. This guide describes the **native-schema** runtime; its database provisioning/migration/startup instructions are **not applicable to that legacy schema yet**. Follow the [local compatibility preparation/server handoff](post-demo-mysql-zoho-plan.md#shared-database-preparation) first. No legacy runtime adapter is implemented, and no native migration must be applied to the existing live CRM to force compatibility.
+Nginx `bills.voltronix.ae` -> web `127.0.0.1:3301` -> API `127.0.0.1:3302`. Ports **3001/3002 are occupied**; **3301/3302 are examples, not verified available ports**. No API or database listener is exposed publicly. The web verifies the Bills API's explicit identity before forwarding credentials. Separate `bills-crm-web` and `bills-crm-api` accounts run the two services.
 
-## 1. Owner preflight: do not install or stop anything yet
+## 1. Read-only preflight and stop conditions
 
-Read-only commands on the intended Ubuntu host, manually, after confirming administrative access:
+The operator first confirms the actual host, maintenance scope, backup custodian and available resources. These are future manual commands, not a request for this agent to connect:
 
 ```bash
 cat /etc/os-release
 uname -m
 id
 free -h
-df -hT
-df -i
+df -hT /var/www /var/backups
+df -i /var/www
 ss -ltnp
 systemctl --type=service --state=running
-node --version
-npm --version
+systemctl --version
 nginx -v
-mysql --version
-timedatectl status
+sudo nginx -t
+sudo stat /var/www/bills.voltronix_ae
+sudo find /var/www/bills.voltronix_ae -maxdepth 1 -printf '%M %u:%g %f\n'
+getent passwd bills-crm-web bills-crm-api
+getent group bills-crm-web bills-crm-api
+systemctl list-unit-files 'bills-crm-*'
 ```
 
-Missing commands are prerequisites, not permission to install a random package or replace another workload. Record current services, port owners, resource headroom, disk/mount lifecycle, existing firewall/remote-access policy and backup arrangements privately. No fixed RAM/disk recommendation substitutes for measured build/upload/concurrent-write load. Do not terminate an unrelated process using 80/443/3001/3002/3306/3308. Reserve the selected ports or resolve the conflict through its owner.
+Record results privately. Confirm 3301 and 3302 have no listener and are reserved for Bills; do not terminate any owner of a conflicting port. Confirm that `runtime`, `bills-releases`, `bills-current`, `/etc/bills-crm`, both proposed users/groups/services and the new Bills Nginx filename are absent, including dangling symlinks. If any exists, stop and review its owner and purpose; never reuse or overwrite it blindly. If the target is a symlink, mounted application volume or a different directory than expected, obtain a reviewed layout first. The guide assumes an ordinary existing directory.
 
-The root `package.json` requires **Node >=24.0.0 <25**. This workspace verified Node 24.19.0; use an approved supported 24.x build and the single root `package-lock.json`. Dependencies are installed once at the project root; neither `server/` nor `shared/contracts/` requires a separate install. Ubuntu's default Node/MySQL packages are not assumed to satisfy the pinned versions. Obtain Node and Oracle MySQL 8.4.11 through an independently approved installation/provenance procedure; verify versions before proceeding. Do not substitute MariaDB or change the runtime version check. Network installs, registry audits and OS package updates require the owner's separate approval and maintenance plan.
+Inspect the existing Bills/CRM virtual hosts privately before choosing a separate filename. A second `server_name bills.voltronix.ae` is a conflict even when `nginx -t` exits zero with a warning. Existing `crm.voltronix.ae` configuration, global Nginx files, system-wide Node, firewall rules and other application processes are outside this change. Record baseline service state and approved existing health evidence; do not use business mutations as probes.
 
-Confirm whether the historical domain `bills.voltronix.ae` is actually the production hostname. The template hostname **`crm.example.invalid` is deliberately not deployable**. Select a separate staging DNS name, actual DNS control, LAN/public addressing and certificate plan. Office Internet may use CGNAT or block inbound ports: verify with the network owner/ISP; do not assume a public address or enable port forwarding blindly. VPN/internal-only access is preferable until external exposure is explicitly approved. DNS, NAT, firewall and certificate changes below are owner actions, never agent actions.
+## 2. Backups and preservation evidence before changes
 
-## 2. Runtime candidate and asset boundary
+Have the existing backup owner verify the current CRM database backup and an isolated recovery receipt through their established procedure. This runbook issues **no database command**, opens no connection and supplies no dump/restore/migration command. A directory tarball is not proof of a consistent live database backup.
 
-Local cleanup does not make the development workspace deployable wholesale. Historical cleanup evidence records removal of a reproducible `tsconfig.tsbuildinfo` cache and a separate 858-file temporary build copy after verification; those records are not the single-root refactor inventory. Original/private data, historical reports, tests, dependencies and prior application directories remain recoverably retained. The root README and refactor report describe the current layout. Keep root source/configuration, `server/`, `shared/contracts/`, `deploy/ubuntu/`, `tools/run-local.mjs` and the root lockfile together. Do not transfer `.git`, `.local-data`, `.local-dev`, `.private-legacy`, historical private inputs or original `assets` trees. Every new documentation/source change requires a newly verified candidate; prior candidates remain immutable evidence.
-
-The separate `release/runtime-<UUID>/` source candidate contains root `src/`, root package/configuration files, `server/src/`, `shared/contracts/`, `tools/run-local.mjs`, `deploy/ubuntu/`, deployment/checklist documentation and `runtime-manifest.json`. It contains the pinned root dependency graph, source, API versioned migrations and the compiled-operator source. It does **not** contain Git history, actual env/profiles, credentials, customer files, databases, originals/PHP, private evidence, backups, logs, tests, node_modules, Windows binaries or generated builds. Only supported build/start/operator scripts remain in its root manifest; dependency versions and the root lockfile are unchanged. A pre-refactor candidate is not valid evidence for this layout.
-
-**Asset provisioning is OWNER TO CONFIRM and blocks visual/PDF release acceptance.** All `public/`, `resources/quotation-pdf/`, original `assets/` and `server/assets/` are deliberately excluded from the runtime candidate; original files remain untouched. This includes theme CSS/icon fonts, login/department/branding images, favicon, PDF fonts/notices, backgrounds, signature and stamp. Do not copy an entire original upload directory. Obtain rights and review an exact asset manifest; provision only those approved bytes at their existing paths. Required template assets include `server/assets/quotation-pdf/{databg.png,switchgear_bg4.png,sign.jpg,stamp.jpg,Roboto-Regular.ttf,Roboto-Bold.ttf,Roboto-LICENSE.txt,DejaVuSansCondensed.ttf,DejaVuSansCondensed-Bold.ttf,DejaVuinfo.txt}`; font notices must accompany fonts. Frontend layout references local theme stylesheets under `public/legacy/assets/css/` and corresponding images/fonts; inspect the excluded-assets inventory beside the package before approving them. Missing assets are not replaced with fabricated business branding.
-
-The candidate is **not GitHub publication approval**. Known-secret/generic-secret and file-boundary checks are useful but not proof of absence of every unknown/encoded secret. An independent exact-export review remains mandatory. Never transfer the working repository, `.git`, a Git bundle, backups or its private archive as the deployment artifact.
-
-## 3. Directories, service users and build
-
-The following are future mutating owner commands, after a non-production staging host and unused paths are approved. Substitute real approved release IDs/paths; do not run placeholder commands. Check each intended user/path is absent before creation; if it exists, inspect ownership/purpose instead of modifying it.
-
-```bash
-# Owner reviews existing identities and paths first:
-getent passwd voltronix-crm-api
-getent passwd voltronix-crm-web
-test ! -e /srv/voltronix-crm
-test ! -e /etc/voltronix-crm
-# Only if creation is approved and these identities do not exist:
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin voltronix-crm-api
-sudo useradd --system --no-create-home --shell /usr/sbin/nologin voltronix-crm-web
-sudo install -d -m 0755 -o root -g root /srv/voltronix-crm/releases
-sudo install -d -m 0700 -o root -g root /etc/voltronix-crm
-```
-
-Unpack/copy only the verified source candidate into a **new** immutable release directory, using a non-root build user in a separate build area. Never overlay a running release. Review manifest hashes and rejects before build; retain the source manifest and approval. Use a trusted registry/lockfile policy; installation executes dependency lifecycle scripts and requires separate authority. Do not copy Windows node_modules to Ubuntu.
-
-Run sequentially in that new release/build root, stopping at every failure:
+Create a private backup of the existing Bills directory before adding any child paths. Use an approved backup filesystem with adequate space, outside `/var/www/bills.voltronix_ae`. For example, after verifying this new destination is absent:
 
 ```bash
 set -euo pipefail
-export NEXT_TELEMETRY_DISABLED=1
-npm ci --no-audit --no-fund
-# Set the three reviewed Next bridge process values from section 4 before build.
-# Build compiles shared contracts, Express, then Next from this one root:
-npm run build
-# Production runtime needs no TypeScript/test tools after successful builds:
-npm prune --omit=dev --no-audit --no-fund
+release_id=bills-foundation-20261017-01   # choose a NEW recorded identifier
+backup_dir=/var/backups/bills-crm-preparation/$release_id
+test ! -e "$backup_dir"
+test ! -L "$backup_dir"
+sudo install -d -m 0700 "$backup_dir"
+sudo tar --acls --xattrs --one-file-system -cpf "$backup_dir/bills-before.tar" \
+  -C /var/www bills.voltronix_ae
+sudo tar --compare --acls --xattrs -f "$backup_dir/bills-before.tar" -C /var/www
+sudo sha256sum "$backup_dir/bills-before.tar"
 ```
 
-Do not overlap builds. The final release includes compiled `server/dist/` and `shared/contracts/dist/`, root `.next/` and root Linux `node_modules/`. Keep `shared/contracts/` present because the root application uses its local linked package. Native SQLite dependencies remain part of retained Next source compatibility; Express production guards prohibit direct frontend DB use. Review dependency/license/vulnerability findings using the approved registry before accepting a release; no external vulnerability scan was performed here.
+Review warnings/exit codes; changing files or excluded submounts require the backup owner's consistent-copy procedure before continuing. Store the archive hash, file permissions, existing symlink targets and existing service/configuration baseline privately. Verify recoverability on an isolated location, never by restoring over live files. Do not include the backup or its contents in a release, Git commit or chat. Retain any failure evidence.
 
-**`npm run dev` and `npm start` are deliberately credential-free local launchers, not production service commands.** They select the Express foundation without reading `server/.env`; database-backed authentication and CRM readiness remain unavailable. An independently authorized configured API can use root `npm run start:api:configured` (`node server/dist/cli.js`). The reviewed systemd units run that compiled API and root `node_modules/next/dist/bin/next start` separately, preserving their distinct approved process environments. Do not replace those units with the local launcher.
+## 3. Prepare, verify and transfer a fresh source candidate
 
-Install the reviewed build as root-owned source/runtime files, readable by the services, not generally writable by them. Only the web `.next/cache` and explicitly approved private state/log destinations are writable. Do not recursively change ownership of an existing server workspace. Stage a new `current` symlink only after approval; private runtime files themselves and their `.local-data/operators` directories must be ordinary physical files/directories, never symlinks. Use the physical release path for profile validation/operator commands.
+Run local checks from the separate preparation checkout; do not package the retained original workspace. The allowlisted exporter includes required source/configuration and selected approved assets, omits real environments, databases, uploads, sessions, private PDF marks, Git history, dependencies and build outputs. Read `bills-crm-source/FILE-MANIFEST.json` for exact exclusions. An old candidate does not cover new code changes. The exporter verifies the exact ZIP contents as well as the source directory; do not repackage its result or transfer its tests/source checkout instead.
 
-## 4. Exact environment and private JSON configuration
+Local PowerShell commands after reviewing the final diff and test report:
 
-**Updated production alternative:** the owner selected `https://bills.voltronix.ae`; DNS/TLS has not been checked. The [backend environment contract](backend-production-environment.md) provides the complete template for `CRM_RUNTIME_SOURCE=environment`, with credentials, UUID, actual approval references and issuer validated through the same production validator. Do not mix those fields with `CRM_RUNTIME_PROFILE`. The private JSON instructions below remain supported as an alternative, not the only credential source. Zoho credential keys are recognized only while disabled; live sync remains unimplemented and enabling it refuses startup. Keep actual local-demo configuration unchanged. This option does not alter migration-operator authority or approve a real connection.
-
-**Do not copy this workspace's real env or profiles.** The SQLite launcher still supplies its existing fixed local settings and requires no new env. Templates remain safe local examples. The table below describes the seven server/three frontend settings for the JSON option; the linked environment alternative adds explicit backend-only MySQL/disabled-Zoho keys. No root env, browser-public CRM key, session-secret or upload-path setting is required.
-
-For systemd, create private **server-side** `/etc/voltronix-crm/backend.env` and `/etc/voltronix-crm/frontend.env` using an approved editor/secret-delivery workflow. These are future owner-created files, not files created by this task. systemd reads them before dropping privileges; mode 0600, owner root. Normal independent backend CLI also supports `<physical-release>/server/.env` anchored at the executable, but do not maintain duplicate files unnecessarily: process environment wins, and absence of that package file is supported. Next accepts process settings or its own package dotenv file; the units use process settings. Never put DB credentials in frontend or `NEXT_PUBLIC_*`.
-
-| Name | Service; required? | Value/source | Missing or invalid |
-| --- | --- | --- | --- |
-| `CRM_API_ENVIRONMENT` | Backend; required | `production` for the production contract, including its isolated staging exercise | Refused; no silent mode inference. |
-| `CRM_API_HOST` | Backend; required | `127.0.0.1` | Refused; API cannot bind publicly. |
-| `CRM_API_PORT` | Backend; required | `3002` in supplied units; explicit permitted port 1024–65535 | Refused; coordinate any different private port across bridge/proxy/units. |
-| `APP_ORIGIN` | **Both** services; required | Owner-approved canonical `https://<dns-host>` at default 443, no path/trailing slash | Startup/configuration refused; origins must match. |
-| `CRM_RUNTIME_ENABLE` | Backend; required in production | `approved-production-mysql-crm-runtime` | Production refuses foundation-only or partial selection. |
-| `CRM_RUNTIME_PROFILE` | Backend; required | `.local-data/operators/mysql-crm-runtime.json` | Refused; no profile fallback/discovery. |
-| `CRM_MYSQL_NETWORK_DISABLED` | Backend; optional safety veto | `1` during offline work; **blank** only in explicitly approved real-target process | `1` prevents startup DB check; removing it is not approval. |
-| `CRM_FRONTEND_BACKEND` | Frontend; required in production | `express` | Production refuses direct-Next fallback. |
-| `CRM_EXPRESS_ORIGIN` | Frontend; required | `http://127.0.0.1:3002` (no `/api/v1`) | Refused; private loopback upstream only. |
-| `NODE_ENV` | Process/unit, not strict backend dotenv key | Units set `production` | Framework mode; not permission to connect to production. |
-| `NEXT_TELEMETRY_DISABLED` | Frontend/build process; operational | `1` | Telemetry control, not application authentication. |
-
-Backend environment-file example, **nonsecret placeholders, not an active file**:
-
-```dotenv
-CRM_API_ENVIRONMENT=production
-CRM_API_HOST=127.0.0.1
-CRM_API_PORT=3002
-APP_ORIGIN=https://OWNER_APPROVED_DNS_HOST
-CRM_RUNTIME_ENABLE=approved-production-mysql-crm-runtime
-CRM_RUNTIME_PROFILE=.local-data/operators/mysql-crm-runtime.json
-CRM_MYSQL_NETWORK_DISABLED=
+```powershell
+$candidate = (node tools/prepare-bills-package.mjs --create | ConvertFrom-Json).output
+if ($LASTEXITCODE -ne 0 -or -not $candidate) { throw 'Package creation failed' }
+node tools/prepare-bills-package.mjs --verify $candidate
+if ($LASTEXITCODE -ne 0) { throw 'Package verification failed' }
+$archive = Join-Path $candidate 'bills-crm-source.zip'
+tar -tf $archive
+if ($LASTEXITCODE -ne 0) { throw 'Archive inspection failed' }
+Get-FileHash -LiteralPath $archive -Algorithm SHA256
 ```
 
-Frontend environment-file example:
+Review the archive list against the verified manifest and the checksum via an independently trusted channel. Transfer **only the archive and checksum** to an operator-created NEW private incoming directory; never copy the working tree, `.git`, node_modules, existing production env or retained private files. Replace the example SSH alias and incoming path only after explicit deployment approval:
 
-```dotenv
-CRM_FRONTEND_BACKEND=express
-CRM_EXPRESS_ORIGIN=http://127.0.0.1:3002
-APP_ORIGIN=https://OWNER_APPROVED_DNS_HOST
+```powershell
+scp $archive "$archive.sha256" bills-approved-host:/approved/new-private-incoming/
 ```
 
-The uppercase DNS placeholders are intentionally invalid until replaced by a real canonical lowercase host. Do not use default example domains/identity values to bypass validation.
+That command is documented only and was not executed. The incoming directory must be owned by the approved build operator, mode 0700, outside public document roots. Record the actual archive basename and checksum.
 
-For the **JSON option**, the API's credential/issuer configuration is one strict private JSON. The environment alternative uses the documented backend-only fields instead; never select both. JSON location: `<physical-release>/server/.local-data/operators/mysql-crm-runtime.json`. Create `.local-data` and `operators` owned by `voltronix-crm-api`, mode 0700; JSON owned by that same API UID, mode 0600, single-link ordinary file, no BOM/symlink. Canonical JSON is two-space `JSON.stringify(value, null, 2)` plus newline. Deliver only the approved runtime credential, never migration/root authority. Web UID must not read it.
+## 4. App-local Node and Linux build
 
-```json
-{
-  "version": 2,
-  "mysql": {
-    "provider": "mysql",
-    "environment": "production",
-    "host": "127.0.0.1",
-    "port": 3306,
-    "database": "<owner-approved-lowercase-schema>",
-    "user": "<owner-approved-runtime-user>",
-    "password": "<private-value-from-authorized-operator>"
-  },
-  "approval": {
-    "approved": true,
-    "reference": "<actual-approval-reference>",
-    "provisioningReference": "<actual-provisioning-reference>",
-    "serverUuid": "<actual-verified-server-uuid>"
-  },
-  "issuer": {
-    "company": "<owner-selected-supported-company>",
-    "salesperson": "<owner-approved-display-name>"
+Provision a reviewed official Node **24.x** distribution for the host architecture into the NEW `/var/www/bills.voltronix_ae/runtime/node` path. Verify its release checksum/signature under the operator's approved provenance process. Do not run a remote installer script, replace `/usr/bin/node`, change shell profiles, change global package links or upgrade another app. If the runtime path exists, stop. Version-selection, download and certificate authenticity are manual prerequisites; no network installation occurred during this task.
+
+```bash
+node_bin=/var/www/bills.voltronix_ae/runtime/node/bin/node
+npm_cli=/var/www/bills.voltronix_ae/runtime/node/lib/node_modules/npm/bin/npm-cli.js
+"$node_bin" --version
+"$node_bin" "$npm_cli" --version
+```
+
+Verify Node reports 24.x, then work as a nonroot build operator in a new private directory on the same Linux architecture as the target. Substitute the recorded source archive basename:
+
+```bash
+set -euo pipefail
+incoming=/approved/new-private-incoming
+archive_name=bills-crm-source.zip
+cd "$incoming"
+sha256sum -c "$archive_name.sha256"
+unzip -Z1 "$archive_name"   # verify only the bills-crm-source/ root
+build_root=$(mktemp -d /tmp/bills-build.XXXXXXXX)
+chmod 0700 "$build_root"
+unzip -q -n "$incoming/$archive_name" -d "$build_root"
+source_root=$build_root/bills-crm-source
+cd "$source_root"
+```
+
+Continue the following sections in the same dedicated operator shell so the recorded paths remain available; use `set -euo pipefail` and stop on every failure. The independently reviewed, checksummed archive must contain regular files/directories only. After extraction, verify each source hash before installing dependencies:
+
+```bash
+"$node_bin" --input-type=module -e '
+import fs from "node:fs";
+import crypto from "node:crypto";
+const manifest = JSON.parse(fs.readFileSync("FILE-MANIFEST.json", "utf8"));
+for (const f of manifest.files) {
+  if (typeof f.path !== "string" || /[\\:\x00-\x1f\x7f]/.test(f.path)
+    || f.path.split("/").some(p => !p || p === "." || p === "..")) throw Error("Invalid manifest path");
+  const parts = f.path.split("/");
+  for (let i = 1; i < parts.length; i++) {
+    const parent = fs.lstatSync(parts.slice(0, i).join("/"));
+    if (!parent.isDirectory() || parent.isSymbolicLink()) throw Error("Unexpected parent directory");
   }
+  const s = fs.lstatSync(f.path);
+  if (!s.isFile() || s.isSymbolicLink()) throw Error("Unexpected file type");
+  const b = fs.readFileSync(f.path);
+  if (b.length !== f.bytes || crypto.createHash("sha256").update(b).digest("hex") !== f.sha256) throw Error("Hash mismatch");
 }
+console.log("Source manifest hashes verified:", manifest.files.length);
+'
 ```
 
-These placeholders must fail validation. `company` must be the owner's actual choice of existing supported `VOLTRONIX CONTRACTING LLC` or `VOLTRONIX SWITCHGEAR LLC`; do not select one on the owner's behalf. Salesperson is an explicit approved printable display value, not guessed from an account. New quotations snapshot the supplied issuer; existing quotations are not backfilled/repriced. The long-lived v2 production approval is deployment provenance, not provider authorization. The v1 development/test profile remains separate and retains its ≤24-hour approval limit. Port 3308 is supported only when that is the approved actual local MySQL listener.
-
-Sessions/CSRF use random 32-byte tokens with stored hashes and existing two-hour limits; there is no `SESSION_SECRET`/`JWT_SECRET`. Do not expose cookies/token values in logs or test receipts. Zoho runtime remains unimplemented: only the documented inactive Zoho keys are accepted, and `ZOHO_ENABLED=true` refuses startup. The historically exposed credential must never be used.
-
-## 5. MySQL creation, migration, backup and restore
-
-Follow the source-derived [MySQL production operator guide](mysql-production-operator-guide.md). It supplies exact schema/user constraints, the separate private migration profile, exact least-privilege grant list, identity checks and future backup/restore safety gates. It is part of this manual procedure, not optional background.
-
-Build-stage native commands from the root of the separate approved operator release, never the live demo:
+Use the lockfile without unrelated upgrades. Installation may need approved registry access; skipped dependency lifecycle scripts mean native-module requirements must be verified separately. Do not copy Windows node_modules or compiled native binaries. Use explicit build-only process settings; `env -i` prevents unrelated inherited app settings:
 
 ```bash
-npm run mysql:operator -- inspect
-# Only after verified backup/rollback/exclusive-write-window approval:
-npm run mysql:operator -- migrate --acknowledge-additive-mysql-ddl-and-retained-failures
-npm run mysql:operator -- inspect
+env -i HOME="$HOME" PATH="$(dirname "$node_bin"):/usr/bin:/bin" \
+  "$node_bin" "$npm_cli" ci --ignore-scripts --include=dev --no-audit --no-fund
+env -i HOME="$HOME" PATH="$(dirname "$node_bin"):/usr/bin:/bin" \
+  NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 \
+  APP_ORIGIN=https://bills.voltronix.ae CRM_FRONTEND_BACKEND=express \
+  CRM_EXPRESS_ORIGIN=http://127.0.0.1:3302 CRM_API_INSTANCE_ID=bills-crm \
+  CRM_WEB_HOST=127.0.0.1 CRM_WEB_PORT=3301 \
+  CRM_DATABASE_MODE=disabled CRM_MYSQL_NETWORK_DISABLED=1 ZOHO_ENABLED=false \
+  "$node_bin" tools/run-bills.mjs build
+test -f .next/BUILD_ID
+test -f server/dist/server.js
+test -d shared/contracts/dist
 ```
 
-The root wrapper executes compiled `server/dist/operations/mysql-cli.js` with `server/` as its working directory and works without tsx/dev dependencies. `inspect` verifies identity/privileges/schema; it connects and is not an offline command. Migration never creates accounts, imports/seeds data, drops a schema or repairs partial DDL. Require fresh 3 then 0 or exact-v1 2 then 0; keep interrupted targets for review. Do not run against any existing DB during this development phase. Native MySQL acceptance is **BLOCKED** until an independently approved isolated target exists.
+The Linux build is required even when local Windows checks passed. The host must already have an approved ZIP extraction utility; this guide does not install operating-system packages. Runtime needs `.next/`, `server/dist/`, `shared/contracts/` and its `dist/`, Linux `node_modules`, root configuration/package files, startup tools and the approved public/PDF font assets. Keep the immutable source manifest and build receipt. Private PDF marks and historical attachments are not provisioned by this foundation. No migration, seed, demo initializer or Zoho setup command belongs in install/build/start.
 
-## 6. Nginx, certificates, network boundaries
+## 5. New release and separate services
 
-Review `deploy/ubuntu/nginx.conf.example` and replace **every** `crm.example.invalid` placeholder consistently with the approved staging hostname first. The example exposes Next only; it does not give the public Internet a direct Express or MySQL port. Frontend forwards same-origin API requests internally. Authorization/CSRF use configured origins, not client-supplied forwarded headers; Express keeps `trust proxy=false`. No permissive CORS header is required.
-
-The outer upload cap is 52 MiB to permit the existing bounded multipart overhead; application checks remain authoritative: task/PM 16,384,000 bytes, other four department log files 52,428,800. Never disable validation or increase these limits solely to pass a proxy test. Test real memory/packet/timeout capacity before launch.
-
-Certificate issuance/renewal requires a verified domain, actual DNS/network access and separate owner authority. Do not apply the TLS vhost before its real certificate/key exist. A future approved Certbot example (not executed):
+Only after all new path/user checks pass, create Bills-only resources. These commands fail their prerequisites when names already exist; do not bypass the checks:
 
 ```bash
-# First review installed Certbot/Nginx support and the chosen challenge method:
-certbot --version
+target=/var/www/bills.voltronix_ae
+release_dir=$target/bills-releases/$release_id
+test -d "$target"
+test ! -L "$target"
+for path in "$target/bills-releases" "$target/bills-current" /etc/bills-crm; do
+  test ! -e "$path"
+  test ! -L "$path"
+done
+if getent passwd bills-crm-web; then exit 1; fi
+if getent passwd bills-crm-api; then exit 1; fi
+if getent group bills-crm-web; then exit 1; fi
+if getent group bills-crm-api; then exit 1; fi
+sudo useradd --system --user-group --no-create-home --shell /usr/sbin/nologin bills-crm-web
+sudo useradd --system --user-group --no-create-home --shell /usr/sbin/nologin bills-crm-api
+sudo install -d -m 0755 "$target/bills-releases" "$release_dir"
+sudo cp -a --no-preserve=ownership "$source_root/." "$release_dir/"
+sudo chmod 0755 "$release_dir"
+sudo install -d -m 0700 /etc/bills-crm
+sudo install -o root -g root -m 0600 "$release_dir/deploy/ubuntu/bills-web.env.example" /etc/bills-crm/frontend.env
+sudo install -o root -g root -m 0600 "$release_dir/deploy/ubuntu/bills-api.env.example" /etc/bills-crm/backend.env
+sudo install -d -o bills-crm-web -g bills-crm-web -m 0700 "$release_dir/.next/cache"
+sudo ln -s "$release_dir" "$target/bills-current"
+sudo -u bills-crm-web test -r "$release_dir/.next/BUILD_ID"
+sudo -u bills-crm-api test -r "$release_dir/server/dist/server.js"
+```
+
+Review access modes in the NEW release: service users need read/traverse access to source, dependencies and compiled assets; only the web cache is service-writable. Never recursively chown/chmod the existing target or its legacy children. Node native modules may require executable files; preserve build modes. Review the two environment files against [the environment contract](backend-production-environment.md), keeping database disabled and no credentials present.
+
+Check both proposed unit paths are absent, inspect exact unit text, then validate and install only the Bills services:
+
+```bash
+test ! -e /etc/systemd/system/bills-crm-api.service
+test ! -L /etc/systemd/system/bills-crm-api.service
+test ! -e /etc/systemd/system/bills-crm-web.service
+test ! -L /etc/systemd/system/bills-crm-web.service
+sudo systemd-analyze verify "$release_dir/deploy/ubuntu/bills-crm-api.service" "$release_dir/deploy/ubuntu/bills-crm-web.service"
+sudo install -o root -g root -m 0644 "$release_dir/deploy/ubuntu/bills-crm-api.service" /etc/systemd/system/bills-crm-api.service
+sudo install -o root -g root -m 0644 "$release_dir/deploy/ubuntu/bills-crm-web.service" /etc/systemd/system/bills-crm-web.service
+sudo systemctl daemon-reload
+sudo systemctl start bills-crm-api.service
+sudo systemctl start bills-crm-web.service
+sudo systemctl status bills-crm-api.service bills-crm-web.service --no-pager
+```
+
+Do not enable boot startup or change public routing until isolated acceptance. A failed configuration/port/identity preflight is a stop signal; inspect only Bills logs (`journalctl -u bills-crm-api -u bills-crm-web`) privately, never dump entire environments or credential-bearing requests.
+
+## 6. Local foundation smoke checks
+
+These future operator probes use only the new loopback listeners and do not log in, create records or contact the legacy database:
+
+```bash
+curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:3302/api/v1/health/live
+curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:3302/api/v1/health/identity
+curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}\n' http://127.0.0.1:3302/api/v1/health/ready
+curl --noproxy '*' --fail --silent --show-error http://127.0.0.1:3301/api/health/live
+curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}\n' http://127.0.0.1:3301/login
+curl --noproxy '*' --silent --output /dev/null --write-out '%{http_code}\n' http://127.0.0.1:3301/api/auth/me
+```
+
+Expect API liveness 200, exact instance ID `bills-crm` and origin `https://bills.voltronix.ae`, readiness **503**, web liveness/login **200**, and authentication **503**. Inspect responses and Bills logs for redacted diagnostics. Readiness 200 would be unexpected in disabled mode and requires investigation. Home/data pages cannot provide a functioning CRM without persistence; do not treat a login page as acceptance of authenticated workflows. Production secure cookies must be tested later over approved HTTPS, never weakened for HTTP convenience.
+
+## 7. DNS, certificate and separate Nginx configuration
+
+The owner must verify DNS A/AAAA records, actual server addresses, domain control, certificate hostname/chain/expiry, key permissions and renewal before applying the HTTPS template. No certificate is assumed to exist. Provision certificates through an independently reviewed procedure that does not modify any existing site's configuration. Do not start the HTTPS example with nonexistent certificate paths. Its bounded ACME directory is optional; no challenge client or public directory is created by this task.
+
+Review `deploy/ubuntu/nginx.conf.example`: only `bills.voltronix.ae`, dedicated upstream/log names, no `default_server` or wildcard, no PHP handler, no public API/database upstream and no alias to uploads or source. It must be included exactly once in the existing `http {}` context. Confirm no conflicting Bills virtual host already exists; if there is one, stop for an explicit, separately reviewed traffic-switch plan. The template does not replace `/etc/nginx/nginx.conf` or `crm.voltronix.ae` configuration.
+
+After private loopback acceptance, TLS prerequisites and explicit approval to expose the foundation, install a NEW dedicated file/link only if both paths are absent:
+
+```bash
+test ! -e /etc/nginx/sites-available/bills-crm.conf
+test ! -L /etc/nginx/sites-available/bills-crm.conf
+test ! -e /etc/nginx/sites-enabled/bills-crm.conf
+test ! -L /etc/nginx/sites-enabled/bills-crm.conf
+sudo install -o root -g root -m 0644 "$release_dir/deploy/ubuntu/nginx.conf.example" /etc/nginx/sites-available/bills-crm.conf
+sudo ln -s /etc/nginx/sites-available/bills-crm.conf /etc/nginx/sites-enabled/bills-crm.conf
 sudo nginx -t
-# Only with approved public DNS/reachability and an approved temporary HTTP vhost:
-sudo certbot certonly --nginx -d OWNER_APPROVED_DNS_HOST
-# Only after the reviewed TLS config and certificate paths are in place:
+# Only after a successful test with no conflicting-host warnings and approval:
+sudo systemctl reload nginx
+```
+
+A reload affects the shared Nginx master, so it requires explicit operator approval and configuration review even though only a new Bills virtual host is added. Never restart Nginx or unrelated services as a shortcut. If `nginx -t` fails, do not reload; follow the scoped rollback below. After acceptance, optional HSTS is a deliberate edit to the new Bills file only (without `includeSubDomains` or preload), followed by another `nginx -t` and approved reload.
+
+The operator's later HTTPS checks must verify the hostname/certificate, redirect, secure headers and asset loading, and confirm existing CRM behavior using the established nonmutating health checks. Keep foundation readiness 503 visible; do not claim users can work until database/history gates close. Only then consider `systemctl enable bills-crm-api.service bills-crm-web.service` under the separate acceptance decision.
+
+## 8. Roll back only the newly introduced Bills components
+
+Keep receipts of every new file/symlink/service and previous Bills release target. Stop only the new Bills units:
+
+```bash
+sudo systemctl stop bills-crm-web.service bills-crm-api.service
+```
+
+If this procedure introduced the Nginx link, verify it resolves to the exact new Bills file, then unlink just that link, validate the full configuration and request the approved reload:
+
+```bash
+test "$(readlink /etc/nginx/sites-enabled/bills-crm.conf)" = /etc/nginx/sites-available/bills-crm.conf
+sudo unlink /etc/nginx/sites-enabled/bills-crm.conf
 sudo nginx -t
 sudo systemctl reload nginx
-sudo certbot renew --dry-run
-systemctl list-timers --all | grep -i certbot
 ```
 
-Do not stop an existing port-80 workload to obtain a certificate. For CGNAT/private sites, choose an authorized DNS challenge or internal CA/VPN plan; DNS API credentials must remain private and need separate approval. Never use a self-signed certificate while claiming public TLS acceptance. HSTS in the supplied template is enabled only after correct HTTPS operation; choose preload/subdomain policy separately (neither is assumed).
+Run that block only when the recorded new link exists; never remove an older operator-managed host. If these new services were enabled after acceptance, disable only those names. Preserve the release, runtime, environments and failure logs for review. For a first installation, verify `bills-current` still points to the recorded `$release_dir` before unlinking it; do not remove directories or original files. For a later Bills-only upgrade, switch only this dedicated symlink back to the recorded accepted Bills release, then start only Bills services and repeat the loopback checks.
 
-Review firewall rules without changing them (`sudo ufw status verbose` where UFW is actually in use). Preserve administrative access and existing policy before any approved future change. Never expose 3001/3002/MySQL externally. Public 80/443 and router NAT changes require an explicit network decision; no universal firewall command is safe on an uninspected office server.
-
-## 7. systemd installation, health and logs
-
-Review the supplied units at `deploy/ubuntu/voltronix-crm-{api,web}.service`. They use `/usr/bin/node` (must be the verified 24.x executable), `/srv/voltronix-crm/current`, separate UIDs, restricted env files, read-only release files, private temp directories, no new privileges, restart-on-failure limits and graceful SIGTERM. Web gets only its cache writable and cannot access backend private configuration. The API opens no public interface. Install only after staged source/assets/profiles/DB and service account permissions are verified.
-
-Future manual commands, **not executed**:
-
-```bash
-sudo systemd-analyze verify deploy/ubuntu/voltronix-crm-api.service deploy/ubuntu/voltronix-crm-web.service
-# First check destination units are absent or preserve/review their existing versions.
-sudo install -m 0644 deploy/ubuntu/voltronix-crm-api.service /etc/systemd/system/voltronix-crm-api.service
-sudo install -m 0644 deploy/ubuntu/voltronix-crm-web.service /etc/systemd/system/voltronix-crm-web.service
-sudo systemctl daemon-reload
-sudo systemctl start voltronix-crm-api.service
-curl --fail --silent --show-error http://127.0.0.1:3002/api/v1/health/ready
-sudo systemctl start voltronix-crm-web.service
-curl --fail --silent --show-error http://127.0.0.1:3001/api/health/live
-# Enable boot startup only after acceptance, not merely because processes started:
-sudo systemctl enable voltronix-crm-api.service voltronix-crm-web.service
-sudo systemctl status voltronix-crm-api.service voltronix-crm-web.service --no-pager
-```
-
-`/api/v1/health/live` returns process status `running`; `/api/v1/health/ready` verifies the actual runtime DB/schema/privileges/identity and returns `ready` or redacted 503. Frontend `/api/health/live` bridges to Express. Production CLI checks the DB before opening its listener; foundation-only production startup is refused. A health PASS is not authenticated workflow acceptance. Never log a token to prove a login.
-
-Review restricted journals locally (`sudo journalctl -u voltronix-crm-api -u voltronix-crm-web --since today --no-pager`); do not paste raw logs publicly. Nginx access template omits URI/query/body/cookies and records status/timing only. Critical native/server errors can still include operational detail, so journal access/retention remain private. Select real monitoring/alert recipients and thresholds for readiness/latency, 5xx, restart loops, DB connections/locks, packet/memory/storage/inodes, certificate expiry, backup age/failure and restore-test age. Demonstrate delivered and acknowledged alerts on isolated failures; these external monitoring checks are **NOT RUN**.
-
-## 8. Storage, backup, retention and rollback
-
-Uploads are private MySQL BLOBs with metadata/hash validation. There is no public upload directory or object-storage switch. Backups must include all application tables, migration ledger/lock, sequences and attachment bytes, plus separately protected profile/asset/definer/account dependencies. Keep DB data volumes outside release directories. Never point a static Nginx location at a DB, profile, backup, original upload or private archive.
-
-Owner must choose RPO/RTO, backup schedule/retention, storage capacity, encryption-key custody, an off-server destination and restore responsibility. Off-server transfer/provider access is not authorized by this guide alone. See the operator guide for future consistent-capture/restore commands and blockers. Do not consider a successful dump sufficient: independently verify artifact provenance, restore with the source unavailable into a different empty target, reconcile schema/ledger/rows/BLOBs/quotation values/accounts/grants, start an isolated compatible app, test persistence/reconnect and measure recovery time/loss. Original backups remain immutable. The old v1-only frontend backup rehearsal does not cover the native v1–v3 target.
-
-Maintain current/prior immutable release directories and their schema requirements. Before a future switch, stop new writes through an approved maintenance gate, drain only the two owned services, verify backup and record artifact/schema identity. Move traffic/current symlink only after separate cutover authorization; never overwrite an existing release directory. If the candidate fails, keep writes stopped, preserve all post-backup records and inspect compatibility before switching the app back. An older release that rejects the new ledger must remain stopped. No blind down migration, DB snapshot overwrite, checksum edit or automatic retry of an uncertain commit is a rollback. DB recovery is a separately approved new-target operation with reconciliation.
-
-## 9. Staging, cutover and post-deployment smoke
-
-Use a separately approved empty nonproduction MySQL target and synthetic identities, not copied demo/production accounts. The native harness now includes new product/deal/notes/stage/percentage quotation cases, but its real MySQL execution is **NOT RUN**. Follow the [acceptance matrix](staging-acceptance.md): login/logout/expiry, CSRF/permissions/reassignment revocation, deals/products, percentage discounts and historical preservation, both PDFs, all departments/jobs/reports/exports, upload bounds/protected files, concurrency/rollback/uncertain commit/restart and independent restore. Keep existing owner-reported local picker acceptance separate from automated staging.
-
-Before cutover: independently sign off target/schema/grants, exact release/asset/license manifest, private configuration/issuer, TLS/host/network policy, all workflow/security evidence, backup/restore/RPO/RTO, alert delivery, maintenance/rollback authority and user access handoff. **No default administrator or password is created by startup/migration.** Initial production accounts/grants and any data import require a separate explicit owner-approved procedure; do not lift the existing demo identity into production.
-
-After an independently authorized manual deployment, safe anonymous smoke commands against the owner-approved target (future only):
-
-```bash
-curl --fail --silent --show-error http://127.0.0.1:3002/api/v1/health/live
-curl --fail --silent --show-error http://127.0.0.1:3002/api/v1/health/ready
-curl --fail --silent --show-error https://OWNER_APPROVED_DNS_HOST/api/health/live
-# Print status only; expected 401 without a session:
-curl --silent --output /dev/null --write-out '%{http_code}\n' https://OWNER_APPROVED_DNS_HOST/api/auth/me
-```
-
-Then owner-operated normal login/workflows with authorized credentials, no credential collection in automation; verify Secure/HttpOnly/SameSite flags without displaying values, PDF/download/permission checks, logs/readiness and alerts. The existing bounded `verify-staging-http.ts` is specifically nonproduction-only; do not label a production target nonproduction to use it.
-
-## 10. Troubleshooting and remaining approvals
-
-- Configuration refusal: verify exact keys, canonical origin, physical profile path/UID/modes/format and explicit selector; do not print JSON or bypass checks.
-- DB readiness/startup refusal: approved operator checks actual 8.4.11 identity/UUID/port, least privileges and exact migrations. Do not auto-migrate or reconnect to another DB.
-- Login failure: inspect authorization/expiry/origin/secure-cookie behavior without resetting users/grants or capturing cookies. Reverse proxy must not rewrite Origin; public frontend and backend `APP_ORIGIN` must agree.
-- Upload/PDF failure: check approved size/content policy, BLOB/packet capacity, issuer and exact assets; unsupported/active PDFs stay rejected. Do not expose files publicly to diagnose access.
-- Migration interrupted: retain receipts/partial target and writes freeze; MySQL DDL may already be committed. Escalate to approved recovery, never rerun blindly.
-- Missing assets or licenses, initial production identity provisioning, real isolated MySQL/Ubuntu/TLS/recovery/monitoring evidence and credential-incident remediation remain genuine release gates. No local test result substitutes for them.
-
-GitHub publication is separate: revoke/rotate the exposed Zoho secret through authorized provider action, review affected tokens/grants/consumers, then independently verify a fresh positive-allowlist export with no old Git objects/uploads/private artifacts. No Git history, commit, push or deployment is authorized or performed by this document.
+Do not restore, roll back or touch the legacy database: this foundation performed no database changes. Confirm database mode/network veto remained enabled, no credentials were provisioned, no database command was run, and original directory/config/service baselines remain intact. A claim of unchanged live business rows needs the owner's independent evidence; legitimate legacy activity may continue. Do not freeze or overwrite it to make a checksum match.

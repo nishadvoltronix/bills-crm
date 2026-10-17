@@ -75,3 +75,16 @@ test("production checker and CLI refuse a foundation-only startup without openin
     assert.equal(result.stderr.includes("synthetic-secret-marker"), false);
   }
 });
+
+test("checker and native CLI refuse Bills legacy mode or disabled mixed credentials before runtime startup", () => {
+  for (const entrypoint of [checker, cli]) for (const overrides of [
+    { CRM_DATABASE_MODE: "legacy" }, { CRM_DATABASE_MODE: "" },
+    { CRM_DATABASE_MODE: "disabled", CRM_MYSQL_PASSWORD: "synthetic-secret-marker" },
+    { CRM_DATABASE_MODE: "disabled", CRM_RUNTIME_PROFILE: "synthetic-secret-marker" },
+  ]) {
+    const result = run(entrypoint, root, overrides);
+    assert.equal(result.status, 1, result.stderr); assert.equal(result.stdout, "");
+    assert.equal(result.stderr.includes("synthetic-secret-marker"), false);
+    assert.equal(result.stderr.includes("listener started"), false);
+  }
+});

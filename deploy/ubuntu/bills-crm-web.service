@@ -1,0 +1,63 @@
+# MANUAL TEMPLATE ONLY. No service or server has been changed.
+# Install ONLY as /etc/systemd/system/bills-crm-web.service after review.
+# Verify this app-local Node 24.x binary; do not replace system-wide Node.
+# bills-current is a NEW Bills-only symlink, never an existing current path.
+# Create only the NEW release's .next/cache for bills-crm-web, mode 0700.
+[Unit]
+Description=Bills CRM Next.js frontend (database disabled)
+Documentation=file:/var/www/bills.voltronix_ae/bills-current/docs/manual-deployment-guide.md
+Wants=network-online.target bills-crm-api.service
+After=network-online.target bills-crm-api.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=bills-crm-web
+Group=bills-crm-web
+WorkingDirectory=/var/www/bills.voltronix_ae/bills-current
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+EnvironmentFile=/etc/bills-crm/frontend.env
+ExecStartPre=/var/www/bills.voltronix_ae/runtime/node/bin/node /var/www/bills.voltronix_ae/bills-current/tools/run-bills.mjs check-web
+ExecStart=/var/www/bills.voltronix_ae/runtime/node/bin/node /var/www/bills.voltronix_ae/bills-current/tools/run-bills.mjs web
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStartSec=60
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadOnlyPaths=/var/www/bills.voltronix_ae/bills-current
+ReadWritePaths=/var/www/bills.voltronix_ae/bills-current/.next/cache
+InaccessiblePaths=-/var/www/bills.voltronix_ae/bills-current/server/.local-data
+InaccessiblePaths=-/var/www/bills.voltronix_ae/bills-current/server/.env
+InaccessiblePaths=-/etc/bills-crm/backend.env
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bills-crm-web
+
+# No MemoryDenyWriteExecute: Node/V8 needs JIT executable memory.
+# Express unavailability is a redacted 503, never direct-Next database fallback.
+# Wants allows the frontend to recover when the Bills API restarts;
+# its own process being active does not certify dependency readiness.
+[Install]
+WantedBy=multi-user.target

@@ -1,16 +1,31 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { frontendBackend, requireNextDatabase } from "../src/server/config/frontend-backend";
-import { forwardToExpress, readExpress } from "../src/server/express-bridge";
+import { forwardToExpress as forwardWithIdentity, readExpress as readWithIdentity } from "../src/server/express-bridge";
+import { API_IDENTITY_PATH, API_SERVICE_ID } from "@voltronix/crm-contracts";
 
 const local = { CRM_FRONTEND_BACKEND: "express", CRM_EXPRESS_ORIGIN: "http://127.0.0.1:3002", APP_ORIGIN: "http://127.0.0.1:3001" };
-const production = { ...local, NODE_ENV: "production", APP_ORIGIN: "https://crm.example.invalid" };
+const production = { ...local, NODE_ENV: "production", APP_ORIGIN: "https://crm.example.invalid", CRM_API_INSTANCE_ID: "bills-crm" };
+// Keep cookie/CSRF assertions focused on the protected call after a verified identity.
+// Separate express-identity tests exercise preflight failures and data isolation.
+function identityFetcher(fetcher: typeof fetch): typeof fetch {
+  return async (url, init) => {
+    if (url === local.CRM_EXPRESS_ORIGIN + API_IDENTITY_PATH) {
+      assert.equal(init?.method, "GET"); assert.equal(init?.body, undefined);
+      assert.deepEqual([...new Headers(init?.headers)], [["accept", "application/json"]]);
+      return Response.json({ service: API_SERVICE_ID, instanceId: production.CRM_API_INSTANCE_ID, appOrigin: production.APP_ORIGIN });
+    }
+    return fetcher(url, init);
+  };
+}
+const forwardToExpress: typeof forwardWithIdentity = (request, env, fetcher = fetch) => forwardWithIdentity(request, env, identityFetcher(fetcher));
+const readExpress: typeof readWithIdentity = (path, cookie, env, fetcher = fetch) => readWithIdentity(path, cookie, env, identityFetcher(fetcher));
 const token = "a".repeat(43), csrf = "b".repeat(43);
 const secureFlags = "; Max-Age=7200; Path=/; HttpOnly; Secure; SameSite=Lax";
 function request(path: string, init?: RequestInit) { return new Request(production.APP_ORIGIN + path, init); }
 
 test("OFFLINE production requires Express with canonical HTTPS DNS origin and a private loopback upstream", () => {
-  assert.deepEqual(frontendBackend(production), { mode: "express", origin: local.CRM_EXPRESS_ORIGIN, appOrigin: production.APP_ORIGIN });
+  assert.deepEqual(frontendBackend(production), { mode: "express", origin: local.CRM_EXPRESS_ORIGIN, appOrigin: production.APP_ORIGIN, instanceId: production.CRM_API_INSTANCE_ID });
   assert.throws(() => requireNextDatabase(production));
   // A production-mode Next build remains usable by the explicitly selected local demo.
   assert.equal(frontendBackend({ ...local, NODE_ENV: "production" }).mode, "express");

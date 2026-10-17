@@ -1,4 +1,4 @@
-import { API_V1_PREFIX, LARGE_LOG_ATTACHMENT_LIMIT, logAttachmentLimit, type AuthUser } from "@voltronix/crm-contracts";
+import { API_IDENTITY_PATH, API_SERVICE_ID, API_V1_PREFIX, LARGE_LOG_ATTACHMENT_LIMIT, logAttachmentLimit, type AuthUser } from "@voltronix/crm-contracts";
 import { frontendBackend, type FrontendBackend } from "./config/frontend-backend";
 import { parseWebConfig, type WebConfig } from "./config/web";
 
@@ -69,6 +69,27 @@ function unavailable(status = 503): Response {
   return Response.json({ error }, { status, headers: { "Cache-Control": "no-store", Vary: "Cookie" } });
 }
 
+/** Detect accidental cross-service routing before sending browser credentials or body.
+ * Recheck every request; a public identity is not proof against a malicious service. */
+async function verifyExpressIdentity(target: ExpressTarget, requestSignal: AbortSignal, fetcher: Fetcher): Promise<void> {
+  if (target.instanceId === undefined) return; // Retained explicit local-development compatibility.
+  const response = await fetcher(target.origin + API_IDENTITY_PATH, {
+    method: "GET", headers: { accept: "application/json" }, credentials: "omit", redirect: "error", cache: "no-store",
+    signal: AbortSignal.any([requestSignal, AbortSignal.timeout(2_000)]),
+  });
+  if (response.status !== 200 || response.headers.has("set-cookie")
+    || response.headers.get("content-type")?.split(";")[0]?.trim() !== "application/json") {
+    await response.body?.cancel(); throw new ExpressReadError(503);
+  }
+  const identity: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await boundedBytes(response, 4096)));
+  if (identity === null || typeof identity !== "object" || Array.isArray(identity)) throw new ExpressReadError(503);
+  const fields = identity as Record<string, unknown>;
+  if (Object.keys(fields).sort().join(",") !== "appOrigin,instanceId,service"
+    || fields.service !== API_SERVICE_ID || fields.instanceId !== target.instanceId || fields.appOrigin !== target.appOrigin) {
+    throw new ExpressReadError(503);
+  }
+}
+
 /** No fallback on any error. Injected fetch is for offline tests, never a runtime mock store. */
 export async function forwardToExpress(request: Request, environment: Record<string, string | undefined>, fetcher: Fetcher = fetch): Promise<Response> {
   let tooLarge = false;
@@ -78,6 +99,7 @@ export async function forwardToExpress(request: Request, environment: Record<str
     const policy = parseWebConfig({ APP_ORIGIN: target.appOrigin });
     const url = new URL(request.url);
     const destination = expressUrl(target, url.pathname + url.search);
+    await verifyExpressIdentity(target, request.signal, fetcher);
     const logUpload = /^\/api\/(?:v1\/)?departments\/([^/]+)\/jobs\/[^/]+\/logs$/.exec(url.pathname);
     const requestLimit = logUpload ? logAttachmentLimit(logUpload[1]!) + 32_768 : uploadLimit;
     const privateLogFile = /^\/api\/(?:v1\/)?log-attachments\/[^/]+(?:\/preview)?$/.test(url.pathname);

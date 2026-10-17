@@ -27,6 +27,26 @@ test("OFFLINE runtime explicit selection validates a synthetic private input wit
   assertValidatedRuntimeConfiguration(value, now);
 });
 
+test("OFFLINE native runtime preserves explicit API instance identity through profile validation", () => {
+  const value = loadRuntimeConfiguration("synthetic-public-root", { ...environment, CRM_API_INSTANCE_ID: "bills-crm" }, () => profile(), now);
+  assert.equal(value.api.instanceId, "bills-crm");
+  assert.equal(validateRuntimeConfiguration(profile(), { ...api, instanceId: "bills-crm" }, now).api.instanceId, "bills-crm");
+});
+
+test("OFFLINE Bills database modes refuse native runtime before credentials or a private profile can be read", () => {
+  for (const mode of ["disabled", "legacy", "mysql", "", " "]) {
+    let reads = 0;
+    const values = { ...environment, CRM_DATABASE_MODE: mode,
+      get CRM_RUNTIME_ENABLE(): string { return assert.fail("Mode refusal must precede native runtime selector access"); } };
+    assert.throws(() => loadRuntimeConfiguration("unused", values, () => { reads++; return profile(); }, now), RuntimeConfigurationError);
+    assert.equal(reads, 0);
+    assert.throws(() => loadRuntimeConfiguration("unused", { ...environment, CRM_DATABASE_MODE: mode,
+      CRM_RUNTIME_SOURCE: "environment", CRM_MYSQL_PASSWORD: "synthetic-secret-marker" }, () => { reads++; return profile(); }, now),
+    error => error instanceof RuntimeConfigurationError && !error.message.includes("synthetic-secret-marker"));
+    assert.equal(reads, 0);
+  }
+});
+
 test("OFFLINE runtime requires explicit selector, no debug settings and no alternate profile fallback", () => {
   for (const patch of [{ CRM_RUNTIME_ENABLE: undefined }, { CRM_RUNTIME_ENABLE: "true" },
     { CRM_RUNTIME_PROFILE: undefined }, { CRM_RUNTIME_PROFILE: "../nextjs/.env.mysql.runtime.local" },

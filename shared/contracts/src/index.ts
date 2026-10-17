@@ -1,6 +1,15 @@
 /** Wire-only public exports. No environment, framework, database or Node imports. */
 export const API_V1_PREFIX = "/api/v1" as const;
 export const LIVENESS_PATH = `${API_V1_PREFIX}/health/live` as const;
+export const API_IDENTITY_PATH = `${API_V1_PREFIX}/health/identity` as const;
+export const API_SERVICE_ID = "bills-crm-api" as const;
+
+/** Non-secret routing identity. This does not attest database readiness or authenticate a server. */
+export interface ApiIdentityResponse {
+  service: typeof API_SERVICE_ID;
+  instanceId: string;
+  appOrigin: string;
+}
 
 /** Process liveness only; this does not promise database or workflow readiness. */
 export interface LivenessResponse { status: "running" }

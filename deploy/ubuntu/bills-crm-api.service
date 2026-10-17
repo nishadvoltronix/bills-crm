@@ -1,0 +1,59 @@
+# MANUAL TEMPLATE ONLY. No service or server has been changed.
+# Install ONLY as /etc/systemd/system/bills-crm-api.service after review.
+# Verify this app-local Node 24.x binary; do not replace system-wide Node.
+# No database profile, credentials, migration or MySQL service dependency.
+[Unit]
+Description=Bills CRM Express API (database disabled)
+Documentation=file:/var/www/bills.voltronix_ae/bills-current/docs/manual-deployment-guide.md
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=bills-crm-api
+Group=bills-crm-api
+WorkingDirectory=/var/www/bills.voltronix_ae/bills-current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/bills-crm/backend.env
+ExecStartPre=/var/www/bills.voltronix_ae/runtime/node/bin/node /var/www/bills.voltronix_ae/bills-current/tools/run-bills.mjs check-api
+ExecStart=/var/www/bills.voltronix_ae/runtime/node/bin/node /var/www/bills.voltronix_ae/bills-current/tools/run-bills.mjs api
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStartSec=60
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadOnlyPaths=/var/www/bills.voltronix_ae/bills-current
+InaccessiblePaths=-/var/www/bills.voltronix_ae/bills-current/server/.local-data
+InaccessiblePaths=-/var/www/bills.voltronix_ae/bills-current/server/.env
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bills-crm-api
+
+# No MemoryDenyWriteExecute: Node/V8 needs JIT executable memory.
+# No writable application directory and no database access in this release mode.
+# Liveness 200 and readiness 503 are expected while database access is disabled.
+# Active process state is not authentication or CRM workflow acceptance.
+[Install]
+WantedBy=multi-user.target

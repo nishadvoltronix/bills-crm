@@ -1,8 +1,8 @@
 /** Explicit API selection. Never reads a profile, starts a server or chooses a database. */
-export type FrontendBackend = { mode: "nextjs" } | { mode: "express"; origin: string; appOrigin: string };
+export type FrontendBackend = { mode: "nextjs" } | { mode: "express"; origin: string; appOrigin: string; instanceId?: string };
 
 function loopbackOrigin(url: URL): boolean {
-  return url.protocol === "http:" && url.hostname === "127.0.0.1" && /^\d+$/.test(url.port)
+  return url.protocol === "http:" && ["127.0.0.1", "[::1]"].includes(url.hostname) && /^\d+$/.test(url.port)
     && Number(url.port) >= 1024 && Number(url.port) <= 65535;
 }
 
@@ -22,20 +22,23 @@ export function frontendBackend(environment: Record<string, string | undefined>)
     if (mode === undefined || mode === "nextjs") {
       // The retained direct-Next provider is test/development-only. A production
       // process or HTTPS deployment must never silently select a database fallback.
-      if (environment.CRM_EXPRESS_ORIGIN !== undefined || environment.NODE_ENV === "production"
+      if (environment.CRM_EXPRESS_ORIGIN !== undefined || environment.CRM_API_INSTANCE_ID !== undefined || environment.NODE_ENV === "production"
         || environment.APP_ORIGIN?.startsWith("https:")) throw new Error();
       return { mode: "nextjs" };
     }
     if (mode !== "express") throw new Error();
     const origin = environment.CRM_EXPRESS_ORIGIN, appOrigin = environment.APP_ORIGIN;
+    const instanceId = environment.CRM_API_INSTANCE_ID;
     if (!origin || !appOrigin) throw new Error();
     const upstream = new URL(origin), app = new URL(appOrigin);
     for (const url of [upstream, app]) {
       if (url.username || url.password) throw new Error();
     }
-    if (!loopbackOrigin(upstream) || (!loopbackOrigin(app) && !httpsOrigin(app))) throw new Error();
+    if (!loopbackOrigin(upstream) || (!(loopbackOrigin(app) && app.hostname === "127.0.0.1") && !httpsOrigin(app))) throw new Error();
     if (upstream.origin !== origin || app.origin !== appOrigin || origin === appOrigin) throw new Error();
-    return { mode: "express", origin, appOrigin };
+    if (instanceId !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(instanceId)) throw new Error();
+    if (app.protocol === "https:" && instanceId === undefined) throw new Error();
+    return { mode: "express", origin, appOrigin, ...(instanceId === undefined ? {} : { instanceId }) };
   } catch { throw new Error("Invalid frontend backend configuration."); }
 }
 

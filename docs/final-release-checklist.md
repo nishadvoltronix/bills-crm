@@ -1,28 +1,29 @@
-> Current layout: Next.js is at the repository root; Express is in `server/`. Use the root README for install/build/start commands. The preparation checkpoints below are not production acceptance.
+# Bills CRM release checklist
 
-# Final release checklist
+**2026-10-17: local deployment preparation only. Production data activation and public cutover remain blocked.** The intended hostname is `bills.voltronix.ae`; the existing `crm.voltronix.ae` service, legacy PHP source, database, uploads and backups must continue unchanged. No command in the [manual runbook](manual-deployment-guide.md) has been executed against the server by this task.
 
-Current phase: single-root local refactor and manual Ubuntu 24.04 preparation. **Production cutover remains BLOCKED; this refactor authorizes no new GitHub push or deployment.** Detailed local evidence remains in the root README/refactor report and separately retained readiness records. Use [manual deployment](manual-deployment-guide.md), [MySQL operator instructions](mysql-production-operator-guide.md) and [staging acceptance](staging-acceptance.md). This checklist does not authorize any server action.
+This checklist supersedes the old native-schema installation assumptions for this target. Use the [current verification report](production-preparation-report.md) for actual local test counts; historical suite totals, source builds, static template tests and HTTP liveness are not production acceptance.
 
-**2026-10-15 update:** the owner intends concurrent `crm.voltronix.ae` and `bills.voltronix.ae` use on the existing legacy database. The legacy runtime adapter is not implemented; never apply native migrations to that live schema. Production OAuth setup is complete and org/current-user reads succeed, but independent identity pinning, live workflow acceptance and runtime synchronization remain unfinished. The [consolidated batch checkpoint](crm-readiness-report.md#consolidated-local-integration-batch) supersedes the historical test counts below. Newly added injectable readers/stage/quote/reconciliation components are not production activation. Earlier package fingerprints do not cover these source changes; an old runtime export must not be presented as the new build.
-
-The table below preserves historical preparation evidence, including earlier counts and publication blockers. It is not the final single-root test report or a claim about the status of a previously published private repository. Re-run current root checks for every candidate: one root install, `npm run typecheck`, `npm run lint`, `npm test` and `npm run build`. `npm start` is only the no-database local build launcher, not production activation.
-
-| Gate | Historical status / evidence required |
+| Gate | Current scope / evidence required |
 | --- | --- |
-| HTTPS-aware Next/Express configuration/cookies, issuer delivery, native MySQL operator and readiness | Local implementation completed; full offline suites passed. Actual HTTPS/MySQL acceptance remains separate. |
-| Backend tests / SQLite tests | **VERIFIED PASS:** 549/549 backend; 142/142 SQLite. |
-| Backend and demo types, backend lint/build, migration/package boundaries | **VERIFIED PASS**, exact commands in readiness. |
-| Frontend full tests/types/lint/build, anonymous browser and picker | **PASS:** 463/463 full tests including intercepted-browser picker regression; types/lint and isolated webpack production build; 63/63 anonymous checks on unchanged live demo. Authenticated picker acceptance remains owner-reported, not new automation. |
-| Database/protected files | **PASS:** fresh 37 tables/419 rows, integrity OK/FK0; 503 uploads, 5,979 private artifacts, 2,631 original source files/3 PHP modifications match retained checks. **BLOCKED evidence:** phase-wide exact row/hash comparison unavailable because the in-memory monitor's stdin closed; no restoration/baseline change. |
-| Separate source-runtime candidate and exact content verification | Exporter/tests implemented; exact final artifact path/count/result recorded separately in repository readiness, not self-certified here. No original data/assets deleted. |
-| Asset/issuer/license approval | **OWNER TO CONFIRM:** approved company/salesperson; exact theme/font/branding/PDF assets and rights. Candidate excludes all assets pending this gate. |
-| Production MySQL target, migrations, CRUD/concurrency/recovery | **BLOCKED / NOT RUN:** no approved running isolated target/private profiles; offline tests are not MySQL acceptance. |
-| Ubuntu/Nginx/systemd/TLS/firewall/resources/certificate renewal | **OWNER TO CONFIRM / NOT RUN:** templates are future commands, not installed or host-verified. |
-| Initial production accounts/grants/data | **OWNER TO CONFIRM:** no default user/credential or import. Preserve demo and historical values; separate provisioning authority/procedure required. |
-| Backup/restore/rollback, RPO/RTO, monitoring/alerts | **BLOCKED / NOT RUN:** owner selects custody/retention/recipients; independently execute approved isolated recovery and failure exercises. |
-| Historical attachments/unsupported PDFs | **BLOCKED only for affected import/unsupported scope:** all 503 owners unverified; 12 rejected PDFs stay safely rejected. No fabricated ownership/input. |
-| GitHub publication | **BLOCKED:** authorized Zoho remediation, asset/license decisions, independently verified sanitized export and separate publication approval. |
-| Deployment, restart of live services, credentials or existing DB changes | **NOT RUN / prohibited during this phase.** |
+| Single-root build | One root `package-lock.json`; contracts, API and Next build together. Reproduce on the chosen Linux architecture with app-local Node 24.x. |
+| Isolated services and ports | New `bills-crm-web` and `bills-crm-api` users/services; loopback ports 3301/3302 are examples requiring read-only host verification. Never reuse occupied 3001/3002. |
+| Environment and API identity | Separate environment templates, explicit canonical HTTPS origin, matching Bills API identity, disabled database/network/Zoho. Invalid configuration must refuse startup. |
+| Database-free foundation | Liveness and login UI can run. Readiness and authentication remain unavailable. No demo data, SQLite fallback or database initialization is acceptable. |
+| Legacy database adapter | **BLOCKED: not implemented.** Obtain authoritative redacted DDL, constraints/indexes/triggers/views, schema version and table engines; reconcile each contract with repository evidence. Native migrations are incompatible with the unverified legacy target. |
+| Historical users and authorization | **BLOCKED:** prove password hashing/verification, account state, role/department/employee permissions, session expiry/revocation and all ownership rules on synthetic fixtures and an approved isolated copy. Never weaken authorization or create default users. |
+| Historical CRM relationships | **BLOCKED:** verify leads/deals/pipeline/history, item identifiers and units, quotation lines/taxes/currencies/rounding, jobs and department relationships. Preserve percentage-only discount behavior and historical totals. |
+| Attachments and PDF resources | **BLOCKED for affected features:** derive ownership/path mappings and approved asset provenance; original signatures, stamps/backgrounds and historical attachments are intentionally excluded. No unrestricted upload-folder copy or public alias. |
+| Concurrent legacy/new writes | **BLOCKED:** map transactions, locking, idempotency, audit history and conflict semantics. A read-only projection is not permission for writes. |
+| Zoho | **BLOCKED / disabled:** runtime synchronization and accepted identity, field mapping, token lifecycle, direction and reconciliation are unfinished. Keep `ZOHO_ENABLED=false`. |
+| Host / TLS / Nginx | **NOT RUN:** verify OS/systemd/Nginx versions, resources, unused directories/users/ports, DNS and certificate validity/renewal. Run `nginx -t` before any separately approved reload. |
+| Preservation and backup | **NOT RUN ON HOST:** verify owner-managed recoverable backups and baseline checksums/permissions for existing files; record existing service state. Do not perform database writes or use a file-copy backup of a live database as recovery proof. |
+| Local tests | Run typecheck, lint, applicable unit/integration/auth/contract/config/port-conflict tests and production build. Identify excluded private fixtures separately; do not silently treat skipped suites as passed. |
+| Dependency findings | Report actual installed/pinned dependency findings separately. No forced audit fix or unrelated upgrade; dependency and native-module behavior still need Linux verification. |
+| Package boundary | New allowlisted source candidate; complete source/configuration/approved assets and startup tools. Verify all hashes and content. Exclude secrets, real environments, databases, uploads, sessions, private assets, `.git`, dependencies and generated builds. |
+| Recovery / rollback | Rehearse only on an approved isolated host. Roll back Bills service/symlink/Nginx changes only; preserve old releases and new failures. No database restore or legacy restart belongs to this procedure. |
+| Publication and deployment | **Not performed.** Review exact diff/artifact and separately approve commit/push and any future deployment. |
 
-**Single safest next manual action:** perform the read-only Ubuntu/server/network preflight in the manual guide and record the actual target prerequisites privately. Do not install, migrate, expose ports, provision credentials or switch traffic until its blockers and isolated staging scope are explicitly resolved.
+Before enabling real users, acceptance must exercise login/logout/session revocation, anonymous denial and permission boundaries, dashboard/navigation, every CRM workflow above, protected downloads and cross-owner denials, errors/audit redaction, PDF correctness, backups and concurrency. Offline mock tests cannot replace isolated real-schema acceptance.
+
+A future foundation smoke test must observe expected HTTP 503 readiness/authentication and must not be described as a working CRM. If acceptance requires real history, keep public traffic unchanged until the legacy adapter, file ownership and recovery gates are closed.

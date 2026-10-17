@@ -54,3 +54,19 @@ test("listener revalidation redacts malformed objects and throwing getters", () 
   }
   assert.throws(() => validateConfig({ ...loadConfig(valid), host: "0.0.0.0" } as unknown as ApiConfig), ConfigurationError);
 });
+
+test("explicit routing identity survives listener validation and accepts only non-secret slugs", () => {
+  const config = loadConfig({ ...valid, CRM_API_INSTANCE_ID: "bills-crm" });
+  assert.equal(config.instanceId, "bills-crm");
+  assert.deepEqual(validateConfig(config), config);
+  for (const instanceId of ["", "BILLS", "with space", "https://secret-marker.invalid", "x\nsecret-marker", "x".repeat(65)]) {
+    assert.throws(() => loadConfig({ ...valid, CRM_API_INSTANCE_ID: instanceId }), ConfigurationError);
+  }
+});
+
+test("explicit IPv6 loopback bind is supported while public and ambiguous binds refuse", () => {
+  assert.equal(loadConfig({ ...valid, CRM_API_HOST: "::1" }).host, "::1");
+  for (const host of ["::", "[::1]", "::ffff:127.0.0.1", "192.0.2.1"]) {
+    assert.throws(() => loadConfig({ ...valid, CRM_API_HOST: host }), ConfigurationError);
+  }
+});

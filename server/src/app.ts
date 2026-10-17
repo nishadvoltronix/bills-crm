@@ -1,6 +1,6 @@
 import express from "express";
 import helmet from "helmet";
-import { LIVENESS_PATH, type LivenessResponse } from "@voltronix/crm-contracts";
+import { API_IDENTITY_PATH, API_SERVICE_ID, LIVENESS_PATH, type ApiIdentityResponse, type LivenessResponse } from "@voltronix/crm-contracts";
 import { validateConfig, type ApiConfig } from "./config.js";
 import { errorHandler, SafeHttpError } from "./http/errors.js";
 import { livenessRequest, privateResponse } from "./http/security.js";
@@ -35,6 +35,19 @@ export function createApp(input: ApiConfig, dependencies: AppDependencies = {}) 
       defaultSrc: ["'none'"], frameAncestors: ["'none'"], baseUri: ["'none'"],
     } },
   }));
+  app.all(API_IDENTITY_PATH, (request, response, next) => {
+    if (request.method !== "GET") {
+      response.setHeader("Allow", "GET");
+      next(new SafeHttpError("methodNotAllowed")); return;
+    }
+    next();
+  }, livenessRequest(config.appOrigin), (_request, response) => {
+    if (config.instanceId === undefined) {
+      response.status(503).json({ error: "The service is temporarily unavailable." }); return;
+    }
+    const body: ApiIdentityResponse = { service: API_SERVICE_ID, instanceId: config.instanceId, appOrigin: config.appOrigin };
+    response.json(body);
+  });
   app.all(LIVENESS_PATH, (request, response, next) => {
     if (request.method !== "GET" && request.method !== "HEAD") {
       response.setHeader("Allow", "GET, HEAD");

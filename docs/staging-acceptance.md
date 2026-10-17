@@ -1,4 +1,4 @@
-> Current layout: Next.js is at the repository root; Express is in `server/`. Use the root README for install/build/start commands. The preparation checkpoints below are not production acceptance.
+> Historical native-schema staging gates only. These are NOT instructions for the existing Bills/PHP database or the database-disabled Bills deployment. No native migrations or test writes may target historical CRM data. Use the current [Bills runbook](manual-deployment-guide.md); [legacy compatibility](legacy-production-compatibility.md) remains blocked.
 
 # Isolated staging acceptance gates
 

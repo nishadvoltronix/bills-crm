@@ -57,7 +57,8 @@ export function assertValidatedRuntimeConfiguration(value: RuntimeConfiguration,
 export function validateRuntimeConfiguration(input: unknown, apiInput: ApiConfig, now = Date.now()): RuntimeConfiguration {
   try {
     const api = loadConfig({ CRM_API_ENVIRONMENT: apiInput.environment,
-      CRM_API_HOST: apiInput.host, CRM_API_PORT: String(apiInput.port), APP_ORIGIN: apiInput.appOrigin });
+      CRM_API_HOST: apiInput.host, CRM_API_PORT: String(apiInput.port), APP_ORIGIN: apiInput.appOrigin,
+      CRM_API_INSTANCE_ID: apiInput.instanceId });
     if (!Number.isFinite(now)) throw new Error();
     if (api.environment === "production") {
       const selected = productionProfile.parse(input);
@@ -90,6 +91,9 @@ export function validateRuntimeConfiguration(input: unknown, apiInput: ApiConfig
 export function loadRuntimeConfiguration(root: string, environment: Readonly<Record<string, string | undefined>>,
   readPrivate: (root: string, name: string) => unknown, now = Date.now()): RuntimeConfiguration {
   try {
+    // This is the native-schema runtime. Disabled Bills startup and the unavailable
+    // legacy adapter must never fall through to its profile or credential sources.
+    if (environment.CRM_DATABASE_MODE !== undefined) throw new Error();
     const allowed = new Set(["CRM_RUNTIME_ENABLE", "CRM_RUNTIME_PROFILE", "CRM_RUNTIME_SOURCE"]);
     const acknowledgement = environment.CRM_API_ENVIRONMENT === "production"
       ? productionRuntimeAcknowledgement : runtimeAcknowledgement;

@@ -13,7 +13,7 @@ const checker = fileURLToPath(new URL("../scripts/check-frontend-config.ts", imp
 const loader = new URL("../node_modules/tsx/dist/loader.mjs", import.meta.url).href;
 const configuration = new URL("../scripts/frontend-configuration.ts", import.meta.url).href;
 const refusal = { status: "REFUSED", code: "FRONTEND_CONFIGURATION", databaseConnections: 0, databaseWrites: 0,
-  hint: "Use CRM_FRONTEND_BACKEND=express and CRM_EXPRESS_ORIGIN=http://127.0.0.1:<port 1024-65535>. APP_ORIGIN must be a distinct HTTP 127.0.0.1 origin with an explicit port or a canonical HTTPS DNS origin on port 443. Production never falls back to direct Next database access. Check readable frontend-owned dotenv files." };
+  hint: "Use CRM_FRONTEND_BACKEND=express and CRM_EXPRESS_ORIGIN=http://127.0.0.1:<port 1024-65535> or http://[::1]:<port 1024-65535>. APP_ORIGIN must be a distinct HTTP 127.0.0.1 origin with an explicit port or a canonical HTTPS DNS origin on port 443. HTTPS also requires CRM_API_INSTANCE_ID matching the API configuration. Production never falls back to direct Next database access. Check readable frontend-owned dotenv files." };
 const contents = Object.entries(template).map(([key, value]) => `${key}=${value}`).join("\n") + "\n";
 function environment(values: Record<string, string | undefined>) {
   const result: NodeJS.ProcessEnv = { NODE_ENV: "test", CRM_MYSQL_NETWORK_DISABLED: "1", NEXT_TELEMETRY_DISABLED: "1" };
@@ -72,7 +72,8 @@ test("frontend configuration checker works outside its package without reading a
 });
 
 test("production HTTPS configuration checks without database secrets, profiles or network calls", () => {
-  assertPass(check({ ...template, NODE_ENV: "production", APP_ORIGIN: "https://crm.example.invalid" }));
+  assertPass(check({ ...template, NODE_ENV: "production", APP_ORIGIN: "https://crm.example.invalid", CRM_API_INSTANCE_ID: "bills-crm" }));
+  assertRefused(check({ ...template, NODE_ENV: "production", APP_ORIGIN: "https://crm.example.invalid" }));
   for (const mode of [undefined, "nextjs"]) {
     assertRefused(check({ NODE_ENV: "production", CRM_FRONTEND_BACKEND: mode, APP_ORIGIN: "https://crm.example.invalid" }));
   }
