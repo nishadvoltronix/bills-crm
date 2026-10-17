@@ -10,7 +10,8 @@ function fixture(initialVersion = 0) {
   const calls: { sql: string; values: unknown[]; ddl: boolean }[] = [];
   const history: { version: number; name: string; checksum: string; state: string }[] = [];
   const state = { database: "crm_local_dev", acquired: 1, released: 1, upgraded: false, lockRow: false,
-    failDdl: "", malformedColumns: false, malformedCheck: false, alteredGrouping: false, unenforcedCheck: false, unknownCheck: false, missingIndex: "" };
+    failDdl: "", malformedColumns: false, malformedCheck: false, alteredGrouping: false, unenforcedCheck: false, unknownCheck: false, missingIndex: "",
+    lengthExpression: "(length(`content`) = `file_size`)", lengthCheckName: "crm_department_log_attachments_chk_2", lengthCheckEnforced: "YES" };
   function applyStatement(sql: string) {
     const table = /^CREATE TABLE ([a-z_]+) /u.exec(sql)?.[1], trigger = /^CREATE TRIGGER ([a-z_]+) /u.exec(sql)?.[1];
     if (table) { assert.equal(tables.has(table), false); tables.add(table); }
@@ -46,7 +47,7 @@ function fixture(initialVersion = 0) {
         { name: state.unknownCheck ? "unreviewed_constraint" : state.upgraded ? "crm_log_attachment_size_v3" : "crm_department_log_attachments_chk_1",
           expression: state.malformedCheck ? "file_size >= 0" : state.alteredGrouping ? `(file_size > (0 and file_size)) <= ${state.upgraded ? 52428800 : 16384000}`
             : `((\`file_size\` > 0) and (\`file_size\` <= ${state.upgraded ? 52428800 : 16384000}))`, enforced: state.unenforcedCheck ? "NO" : "YES" },
-        { name: "crm_department_log_attachments_chk_2", expression: "(octet_length(`content`) = `file_size`)", enforced: "YES" },
+        { name: state.lengthCheckName, expression: state.lengthExpression, enforced: state.lengthCheckEnforced },
       ], []];
       if (sql.startsWith("SELECT version,name,checksum,state")) return [history.map(row => ({ ...row })), []];
       if (sql.startsWith("SELECT id FROM crm_app_lock")) return [state.lockRow ? [{ id: 1 }] : [], []];
@@ -106,6 +107,44 @@ test("OFFLINE MySQL target upgrades the exact v1 prefix without rerunning founda
   assert.equal(JSON.stringify(f.history[0]), saved);
   assert.ok(f.calls.filter(call => call.ddl).every(call => !mysqlMigrations[0].statements.includes(call.sql)));
   assert.equal(f.calls.some(call => /^(?:INSERT|UPDATE|DELETE) (?!INTO crm_mysql_schema_migrations|crm_mysql_schema_migrations)/u.test(call.sql)), false);
+});
+
+test("OFFLINE attachment checks accept Oracle's canonical byte LENGTH and the authored OCTET_LENGTH alias", async () => {
+  for (const expression of ["length(content)=file_size", "(length(`content`) = `file_size`)",
+    "octet_length(content)=file_size", "(octet_length(`content`) = `file_size`)"]) {
+    for (const version of [1, 2, 3]) {
+      const f = fixture(version); f.state.lengthExpression = expression;
+      assert.deepEqual(await inspectMysqlApplicationSchema(f.session, f.options.database), { installed: version, pending: 3 - version });
+      assert.ok(f.calls.every(call => call.sql.startsWith("SELECT ")));
+    }
+    const f = fixture(2); f.state.lengthExpression = expression;
+    const preservedHistory = JSON.stringify(f.history);
+    assert.equal(await migrateMysqlApplicationSchema(f.session, f.options), 1);
+    assert.equal(JSON.stringify(f.history.slice(0, 2)), preservedHistory);
+    assert.ok(f.calls.filter(call => call.ddl).every(call => mysqlMigrations[2].statements.includes(call.sql)));
+    await assertMysqlMigrationsCurrent(f.session, f.options.database);
+  }
+});
+
+test("OFFLINE byte-length checks reject character counts, changed comparisons, names and enforcement before writes", async () => {
+  const mutations = [
+    ...["(char_length(`content`) = `file_size`)", "(character_length(content)=file_size)", "(bit_length(content)=file_size)",
+      "(length(content)<=file_size)", "(length(content)=file_size or 1)", "length(content=file_size)",
+      "(length(content)=file_size+1)", "(length(file_size)=content)"].map(expression =>
+      (f: ReturnType<typeof fixture>) => { f.state.lengthExpression = expression; }),
+    (f: ReturnType<typeof fixture>) => { f.state.lengthCheckName = "unreviewed_byte_length"; },
+    (f: ReturnType<typeof fixture>) => { f.state.lengthCheckEnforced = "NO"; },
+  ];
+  for (const mutate of mutations) {
+    const pending = fixture(2); mutate(pending);
+    await assert.rejects(inspectMysqlApplicationSchema(pending.session, pending.options.database), MysqlMigrationError);
+    await assert.rejects(migrateMysqlApplicationSchema(pending.session, pending.options), MysqlMigrationError);
+    assert.ok(pending.calls.every(call => call.sql.startsWith("SELECT ")));
+    assert.equal(pending.state.upgraded, false);
+    const current = fixture(3); mutate(current);
+    await assert.rejects(assertMysqlMigrationsCurrent(current.session, current.options.database), MysqlMigrationError);
+    assert.ok(current.calls.every(call => call.sql.startsWith("SELECT ")));
+  }
 });
 
 test("OFFLINE MySQL target refuses prefix drift and additional objects before any pending migration write", async () => {

@@ -132,7 +132,10 @@ async function assertDepartmentAttachmentShape(connection: MysqlMigrationSession
   const limit = upgraded ? 52428800 : 16384000;
   const sizeExpressions = [`file_size>0andfile_size<=${limit}`, `(file_size>0andfile_size<=${limit})`,
     `(file_size>0)and(file_size<=${limit})`, `((file_size>0)and(file_size<=${limit}))`];
-  const lengthExpressions = ["octet_length(content)=file_size", "(octet_length(content)=file_size)"];
+  // Oracle 8.4.11 serializes OCTET_LENGTH as its byte-length synonym LENGTH
+  // in CHECK_CLAUSE. Accept only those exact expressions, retaining grouping.
+  const lengthExpressions = ["octet_length(content)=file_size", "(octet_length(content)=file_size)",
+    "length(content)=file_size", "(length(content)=file_size)"];
   if (checks.length !== 2 || !checks.some(row => row.name === (upgraded ? "crm_log_attachment_size_v3" : "crm_department_log_attachments_chk_1")
     && row.enforced === "YES" && sizeExpressions.includes(compact(row.expression)))
     || !checks.some(row => row.name === "crm_department_log_attachments_chk_2" && row.enforced === "YES"
