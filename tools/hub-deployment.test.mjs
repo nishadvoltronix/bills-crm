@@ -30,7 +30,7 @@ function fixture() {
     if (parent !== filename) add(parent);
   }
   for (const directory of [home, app, app + "/releases", home + "/hub-config",
-    home + "/hub-deploy-state", home + "/hub-deploy-logs", home + "/voltronix-hub-deployment"]) {
+    home + "/hub-deploy-state", home + "/hub-deploy-logs", home + "/voltronix-hub-deployment/source"]) {
     add(directory, null, directory.includes("hub-deploy-") || directory.endsWith("hub-config") ? 0o700 : 0o755);
   }
   add(node, "node", 0o755); add(pm2, "pm2", 0o755);
@@ -149,6 +149,20 @@ test("changed configuration, launcher bytes, pointers and blocked recovery refus
     const f = fixture(); mutate(f);
     assert.equal(await f.run("preflight"), 1);
     assert.deepEqual(f.writes, []);
+  }
+});
+
+test("deployment requires the existing source checkout and checks its parent without modifying deployment artifacts", async () => {
+  assert.match(script, /^readonly REPO=\/home\/rjpmadmin\/voltronix-hub-deployment\/source$/m);
+  for (const mutate of [
+    f => { f.files.delete(home + "/voltronix-hub-deployment/source"); },
+    f => { f.files.get(home + "/voltronix-hub-deployment/source").mode = 0o775; },
+    f => { f.files.get(home + "/voltronix-hub-deployment").mode = 0o775; },
+  ]) {
+    const f = fixture(); mutate(f);
+    assert.equal(await f.run("preflight"), 1);
+    assert.deepEqual(f.writes, []);
+    assert.ok(!f.reads.includes(home + "/hub-config/backend.env"));
   }
 });
 
@@ -328,6 +342,31 @@ test("systemd timer persists two-minute checks and uses prepared paths with jour
   assert.match(timer, /^Persistent=true$/m);
   assert.doesNotMatch(rotation, /\/\.pm2\/logs|\/\*\.log/);
   assert.match(rotation, /su rjpmadmin rjpmadmin/);
+});
+
+test("the user-manager alternative uses the actual host executables and the same accepted-state gates without changing service identity", () => {
+  const unit = readFileSync(new URL("../deploy/ubuntu/hub-deploy-user.service", import.meta.url), "utf8");
+  const timer = readFileSync(new URL("../deploy/ubuntu/hub-deploy.timer", import.meta.url), "utf8");
+  assert.match(unit, /Install as \/home\/rjpmadmin\/\.config\/systemd\/user\/hub-deploy\.service\./);
+  assert.doesNotMatch(unit, /^(?:User|Group|DynamicUser)=/m);
+  for (const filename of ["hub-deploy-state/accepted.json", "hub-config/backend.env", "hub-config/frontend.env", "hub-deploy/hub-deploy.sh"]) {
+    assert.ok(unit.includes(`ConditionPathExists=/home/rjpmadmin/${filename}`));
+  }
+  for (const directive of ["Type=oneshot", "WorkingDirectory=/home/rjpmadmin/voltronix-hub-deployment/source",
+    "Environment=HUB_NODE_BIN=/usr/bin/node", "Environment=HUB_PM2_BIN=/usr/lib/node_modules/pm2/bin/pm2",
+    "Environment=PM2_HOME=/home/rjpmadmin/.pm2", "ExecStart=/bin/bash /home/rjpmadmin/hub-deploy/hub-deploy.sh",
+    "NoNewPrivileges=true", "PrivateTmp=true", "Nice=10", "UMask=0077", "StandardOutput=journal", "StandardError=journal"]) {
+    assert.ok(unit.split(/\r?\n/).includes(directive), directive);
+  }
+  assert.match(timer, /^Unit=hub-deploy\.service$/m);
+  assert.doesNotMatch(unit, /^EnvironmentFile=|CRM_MYSQL_|PASSWORD=/m);
+});
+
+test("Git attributes force LF for Linux deployment scripts and both systemd scopes", () => {
+  const attributes = readFileSync(new URL("../.gitattributes", import.meta.url), "utf8");
+  for (const pattern of ["/deploy/ubuntu/*.sh", "/deploy/ubuntu/*.service", "/deploy/ubuntu/*.timer", "/deploy/ubuntu/*.conf", "/.gitattributes"]) {
+    assert.ok(attributes.split(/\r?\n/).includes(`${pattern} text eol=lf`));
+  }
 });
 
 test("deployment shell parses with Bash", t => {

@@ -610,7 +610,7 @@
   },
   {
     "path": "tools/audit-publication.test.mjs",
-    "sha256": "e3304ed96e5e424aca88e565aeb35aab28a0e2c8c417fd5bb8c2807c4035bdff",
+    "sha256": "12951af51f6aa050ad51b5662557e57b1540b123c35da61094df7140172597ac",
     "categories": [
       "literal-password-candidate"
     ]

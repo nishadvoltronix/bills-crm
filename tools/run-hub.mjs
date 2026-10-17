@@ -278,7 +278,12 @@ export async function main(args, inherited = process.env, root = projectRoot) {
     : ["node_modules/next/dist/bin/next", "start", "--hostname", profile.host, "--port", String(profile.port)], true);
 }
 
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+// PM2 fork mode imports ESM through ProcessContainerFork.js without rewriting
+// argv[1]. Its absolute pm_exec_path identifies the application; role arguments
+// still begin at argv[2], exactly as for a direct Node invocation.
+const pm2Entrypoint = process.env.pm_exec_path;
+if ((process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url)
+  || (pm2Entrypoint && isAbsolute(pm2Entrypoint) && pathToFileURL(resolve(pm2Entrypoint)).href === import.meta.url)) {
   main(process.argv.slice(2)).catch(error => {
     process.stderr.write(`${error instanceof Error ? error.message : "HUB startup failed."}\n`);
     process.exitCode = 1;

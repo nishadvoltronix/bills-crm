@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 // placed in the manifest, and unsafe candidates never receive a printed hash.
 const MAX_TEXT_BYTES = 8 * 1024 * 1024;
 const MAX_ASSET_BYTES = 4 * 1024 * 1024;
-const rootFiles = new Set([".editorconfig", "start-local.ps1", "start-sqlite-demo.ps1", "stop-local.ps1", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.server.json", "tsconfig.server.build.json", "tsconfig.demo.json", "next.config.ts", "eslint.config.mjs", ".env.example"]);
+const rootFiles = new Set([".editorconfig", ".gitattributes", "start-local.ps1", "start-sqlite-demo.ps1", "stop-local.ps1", "package.json", "package-lock.json", "tsconfig.json", "tsconfig.server.json", "tsconfig.server.build.json", "tsconfig.demo.json", "next.config.ts", "eslint.config.mjs", ".env.example"]);
 const toolFiles = new Set([
   "tools/preservation-paths.mjs", "tools/preservation-paths.d.mts",
   "tools/audit-publication.mjs", "tools/audit-publication.test.mjs",
@@ -33,7 +33,7 @@ const deploymentFiles = new Set([
   "deploy/ubuntu/bills-crm-web.service",
   "deploy/ubuntu/bills-web.env.example", "deploy/ubuntu/bills-api.env.example",
   "deploy/ubuntu/hub-web.env.example", "deploy/ubuntu/hub-api.env.example",
-  "deploy/ubuntu/hub-deploy.sh", "deploy/ubuntu/hub-deploy.service", "deploy/ubuntu/hub-deploy.timer",
+  "deploy/ubuntu/hub-deploy.sh", "deploy/ubuntu/hub-deploy.service", "deploy/ubuntu/hub-deploy-user.service", "deploy/ubuntu/hub-deploy.timer",
   "deploy/ubuntu/hub-ecosystem.config.cjs", "deploy/ubuntu/hub-logrotate.conf",
 ]);
 // Operational instructions contain placeholders, not actual target profiles or

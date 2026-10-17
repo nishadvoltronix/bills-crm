@@ -1,0 +1,35 @@
+# User-manager alternative; preserve the separate system-manager example.
+# Install as /home/rjpmadmin/.config/systemd/user/hub-deploy.service.
+# Install hub-deploy.timer beside it; use systemctl --user for both units.
+# Enable the timer only after initial HUB acceptance, a successful manual run,
+# PM2 dump backup, startup review and user-manager reboot persistence review.
+# Keep the controller outside releases at /home/rjpmadmin/hub-deploy/hub-deploy.sh.
+# These canonical executable paths match the reviewed Ubuntu HUB host.
+[Unit]
+Description=Build and deploy accepted HUB main updates (user manager)
+ConditionPathExists=/home/rjpmadmin/hub-deploy-state/accepted.json
+ConditionPathExists=/home/rjpmadmin/hub-config/backend.env
+ConditionPathExists=/home/rjpmadmin/hub-config/frontend.env
+ConditionPathExists=/home/rjpmadmin/hub-deploy/hub-deploy.sh
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/rjpmadmin/voltronix-hub-deployment/source
+Environment=HOME=/home/rjpmadmin
+Environment=USER=rjpmadmin
+Environment=LOGNAME=rjpmadmin
+Environment=PM2_HOME=/home/rjpmadmin/.pm2
+Environment=PATH=/usr/bin:/usr/local/bin:/bin
+Environment=HUB_NODE_BIN=/usr/bin/node
+Environment=HUB_PM2_BIN=/usr/lib/node_modules/pm2/bin/pm2
+ExecStart=/bin/bash /home/rjpmadmin/hub-deploy/hub-deploy.sh
+TimeoutStartSec=30min
+TimeoutStopSec=180
+KillMode=mixed
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hub-deploy

@@ -15,9 +15,9 @@ function fixture(t) {
     writeFileSync(absolute, value);
   };
   for (const path of ["server", "src", "tests", "scripts", "public", "resources", "shared/contracts", "tools"]) mkdirSync(join(root, path), { recursive: true });
-  for (const path of [".editorconfig", "license.txt", "start-local.ps1", "start-sqlite-demo.ps1", "stop-local.ps1", "docs/PUBLICATION-README.md", "docs/PUBLICATION.gitignore",
+  for (const path of [".editorconfig", ".gitattributes", "license.txt", "start-local.ps1", "start-sqlite-demo.ps1", "stop-local.ps1", "docs/PUBLICATION-README.md", "docs/PUBLICATION.gitignore",
     "deploy/ubuntu/nginx.conf.example", "deploy/ubuntu/bills-crm-api.service", "deploy/ubuntu/bills-crm-web.service",
-    "deploy/ubuntu/hub-deploy.sh", "deploy/ubuntu/hub-deploy.service", "deploy/ubuntu/hub-deploy.timer",
+    "deploy/ubuntu/hub-deploy.sh", "deploy/ubuntu/hub-deploy.service", "deploy/ubuntu/hub-deploy-user.service", "deploy/ubuntu/hub-deploy.timer",
     "deploy/ubuntu/hub-ecosystem.config.cjs", "deploy/ubuntu/hub-logrotate.conf",
     "docs/manual-deployment-guide.md", "docs/final-release-checklist.md", "docs/mysql-production-operator-guide.md",
     "docs/runtime-excluded-assets.md", "docs/staging-acceptance.md", "docs/backend-production-environment.md",
@@ -58,7 +58,7 @@ test("private directories, legacy PHP, archives and original business files neve
 
 test("deployment publication includes exact Bills/HUB tooling and six reviewed environment templates", () => {
   for (const path of ["deploy/ubuntu/nginx.conf.example", "deploy/ubuntu/bills-crm-api.service", "deploy/ubuntu/bills-crm-web.service",
-    "deploy/ubuntu/hub-deploy.sh", "deploy/ubuntu/hub-deploy.service", "deploy/ubuntu/hub-deploy.timer",
+    "deploy/ubuntu/hub-deploy.sh", "deploy/ubuntu/hub-deploy.service", "deploy/ubuntu/hub-deploy-user.service", "deploy/ubuntu/hub-deploy.timer",
     "deploy/ubuntu/hub-ecosystem.config.cjs", "deploy/ubuntu/hub-logrotate.conf",
     "tools/run-hub.mjs", "tools/run-hub.test.mjs", "tools/hub-deployment.test.mjs",
     "server/src/operations/bootstrap-admin.ts", "server/src/operations/bootstrap-admin-cli.ts", "server/tests/bootstrap-admin.test.ts"]) {
@@ -66,8 +66,9 @@ test("deployment publication includes exact Bills/HUB tooling and six reviewed e
   }
   for (const path of [".env.example", "server/.env.example", "deploy/ubuntu/bills-web.env.example", "deploy/ubuntu/bills-api.env.example",
     "deploy/ubuntu/hub-web.env.example", "deploy/ubuntu/hub-api.env.example"]) assert.equal(classifyPublicationPath(path), "template");
+  assert.equal(classifyPublicationPath(".gitattributes"), "source");
   for (const path of ["deploy/ubuntu/nginx.conf", "deploy/ubuntu/backend.env", "deploy/ubuntu/cert.pem", "deploy/ubuntu/other.service",
-    "deploy/debian/voltronix-crm-api.service", "deploy/ubuntu/hub-secret.env.example", "deploy/ubuntu/hub-other.sh", "tools/hub-unreviewed.mjs"]) {
+    "deploy/debian/voltronix-crm-api.service", "deploy/ubuntu/hub-secret.env.example", "deploy/ubuntu/hub-other.sh", "tools/hub-unreviewed.mjs", ".gitattributes.local"]) {
     assert.notEqual(classifyPublicationPath(path), "source");
   }
 });

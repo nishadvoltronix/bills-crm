@@ -14,7 +14,7 @@ ConditionPathExists=/home/rjpmadmin/hub-config/frontend.env
 Type=oneshot
 User=rjpmadmin
 Group=rjpmadmin
-WorkingDirectory=/home/rjpmadmin/voltronix-hub-deployment
+WorkingDirectory=/home/rjpmadmin/voltronix-hub-deployment/source
 Environment=HOME=/home/rjpmadmin
 Environment=USER=rjpmadmin
 Environment=LOGNAME=rjpmadmin

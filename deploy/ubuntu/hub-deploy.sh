@@ -30,7 +30,7 @@ fi
 [[ $# -eq 1 && "$1" == --sanitized ]] || exit 64
 set -u
 readonly HOME_DIR=/home/rjpmadmin
-readonly REPO=/home/rjpmadmin/voltronix-hub-deployment
+readonly REPO=/home/rjpmadmin/voltronix-hub-deployment/source
 readonly APP=/var/www/hub.voltronix_ae
 readonly RELEASES=/var/www/hub.voltronix_ae/releases
 readonly STATE=/home/rjpmadmin/hub-deploy-state
@@ -205,7 +205,7 @@ function processDefinitions(allowed, required) {
 }
 async function main() {
   if (command === "preflight") {
-    for (const directory of [home, app, app + "/releases", stateDir, home + "/hub-deploy-logs", configDir, home + "/voltronix-hub-deployment"]) safe(directory, true, directory === stateDir || directory === home + "/hub-deploy-logs");
+    for (const directory of [home, app, app + "/releases", stateDir, home + "/hub-deploy-logs", configDir, home + "/voltronix-hub-deployment/source"]) safe(directory, true, directory === stateDir || directory === home + "/hub-deploy-logs");
     if (fs.existsSync(stateDir + "/blocked.json")) fail();
     for (const filename of [process.env.HUB_NODE_BIN, process.env.HUB_PM2_BIN]) safe(filename);
     const value = loadState();

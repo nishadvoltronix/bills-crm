@@ -1,8 +1,10 @@
 [
   ".editorconfig",
   ".env.example",
+  ".gitattributes",
   "deploy/ubuntu/hub-api.env.example",
   "deploy/ubuntu/hub-deploy.service",
+  "deploy/ubuntu/hub-deploy-user.service",
   "deploy/ubuntu/hub-deploy.sh",
   "deploy/ubuntu/hub-deploy.timer",
   "deploy/ubuntu/hub-ecosystem.config.cjs",

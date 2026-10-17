@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { chmodSync, linkSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -187,7 +188,7 @@ test("the executable requires an explicit external environment argument", async 
   }
 });
 
-test("build executes contracts, real API build and frontend in order with only frontend configuration", async () => {
+test("PM2 fork-container ESM startup executes every build stage with only frontend configuration", async () => {
   const directory = fixture(), root = join(directory, "release"), file = join(directory, "frontend.env");
   try {
     mkdirSync(root); writeFileSync(file, serialize(web), { mode: 0o600 });
@@ -207,7 +208,15 @@ test("build executes contracts, real API build and frontend in order with only f
     for (const path of [typescript, next]) { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, recorder); }
     const operatingSystem = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(?:PATH|SYSTEMROOT|WINDIR|HOME|USERPROFILE|TEMP|TMP|TMPDIR)$/i.test(key)));
     const inherited = { ...operatingSystem, CRM_MYSQL_PASSWORD: "private-inherited-secret", UNRELATED_TOKEN: "private-inherited-token" };
-    await main(["build", "--env-file", file], inherited, root);
+    const launcher = join(root, "tools/run-hub.mjs"), container = join(directory, "ProcessContainerFork.cjs");
+    mkdirSync(dirname(launcher)); writeFileSync(launcher, readFileSync(new URL("./run-hub.mjs", import.meta.url)));
+    // Actual PM2 ForkMode.js spawns node ProcessContainerFork.js followed by app
+    // args. The container dynamically imports pm_exec_path and leaves argv alone.
+    writeFileSync(container, "import(require('node:url').pathToFileURL(process.env.pm_exec_path));\n");
+    const started = spawnSync(process.execPath, [container, "build", "--env-file", file], {
+      cwd: root, env: { ...inherited, pm_exec_path: launcher, pm_cwd: root }, encoding: "utf8", windowsHide: true, timeout: 15_000,
+    });
+    assert.equal(started.error, undefined); assert.equal(started.status, 0, started.stderr);
     assert.equal(readFileSync(join(root, "build-stages.txt"), "utf8"), "shared/contracts/tsconfig.json\ntsconfig.server.build.json\nbuild\n");
     assert.doesNotThrow(() => assertBuildOutput(root, validateProfile("web", web)));
     // A failed rebuild removes the old success marker and never reaches later stages.
@@ -215,5 +224,31 @@ test("build executes contracts, real API build and frontend in order with only f
     await assert.rejects(main(["build", "--env-file", file], inherited, root), /child process failed/);
     assert.throws(() => assertBuildOutput(root, validateProfile("web", web)), /hub-build.json/);
     assert.equal(readFileSync(join(root, "build-stages.txt"), "utf8").split("\n").filter(Boolean).length, 3);
+  } finally { rmSync(directory, { recursive: true }); }
+});
+
+test("PM2 imported API entrypoint preserves role/env-file args; unrelated imports stay inert", () => {
+  const directory = fixture(), root = join(directory, "release"), launcher = join(root, "tools/run-hub.mjs");
+  try {
+    mkdirSync(dirname(launcher), { recursive: true });
+    writeFileSync(launcher, readFileSync(new URL("./run-hub.mjs", import.meta.url)));
+    const container = join(directory, "ProcessContainerFork.cjs"), frontendFile = join(directory, "frontend-not-backend.env");
+    writeFileSync(frontendFile, serialize(web), { mode: 0o600 });
+    // A real child process supplies argv; the harness does not invoke main or
+    // reproduce its entrypoint predicate. This models the deployed PM2 ESM import.
+    writeFileSync(container, "import(require('node:url').pathToFileURL(process.env.pm_exec_path));\n");
+    const os = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(?:PATH|SYSTEMROOT|WINDIR|HOME|USERPROFILE|TEMP|TMP|TMPDIR)$/i.test(key)));
+    const result = spawnSync(process.execPath, [container, "api", "--env-file", frontendFile], {
+      cwd: root, env: { ...os, pm_exec_path: launcher, pm_cwd: root }, encoding: "utf8", windowsHide: true, timeout: 10_000,
+    });
+    assert.equal(result.error, undefined); assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /Cannot load the external HUB environment file/);
+    assert.doesNotMatch(result.stderr, /Usage:/); // api and --env-file reached main intact.
+    const importer = join(directory, "other-application.cjs");
+    writeFileSync(importer, "import(require('node:url').pathToFileURL(process.env.HUB_TEST_IMPORT));\n");
+    const imported = spawnSync(process.execPath, [importer, "api", "--env-file", frontendFile], {
+      cwd: root, env: { ...os, pm_exec_path: importer, HUB_TEST_IMPORT: launcher }, encoding: "utf8", windowsHide: true, timeout: 10_000,
+    });
+    assert.equal(imported.error, undefined); assert.equal(imported.status, 0); assert.equal(imported.stderr, "");
   } finally { rmSync(directory, { recursive: true }); }
 });

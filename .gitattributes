@@ -1,0 +1,6 @@
+# Keep Linux deployment scripts and systemd units runnable in Windows-built archives.
+/deploy/ubuntu/*.sh text eol=lf
+/deploy/ubuntu/*.service text eol=lf
+/deploy/ubuntu/*.timer text eol=lf
+/deploy/ubuntu/*.conf text eol=lf
+/.gitattributes text eol=lf
