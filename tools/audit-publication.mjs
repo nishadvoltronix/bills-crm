@@ -43,6 +43,7 @@ const deploymentDocuments = new Set([
   "docs/mysql-production-operator-guide.md", "docs/runtime-excluded-assets.md",
   "docs/staging-acceptance.md", "docs/backend-production-environment.md",
   "docs/legacy-production-compatibility.md", "docs/production-preparation-report.md",
+  "docs/hub-production-operations.md",
 ]);
 const configNames = new Set(["package.json", "package-lock.json", ".gitignore", "eslint.config.mjs", "next.config.ts", "tsconfig.json", "tsconfig.build.json", "tsconfig.sqlite-demo.json"]);
 const codeExtensions = new Set([".ts", ".tsx", ".mts", ".mjs", ".json", ".css", ".ps1"]);

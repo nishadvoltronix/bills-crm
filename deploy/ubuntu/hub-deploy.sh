@@ -101,6 +101,34 @@ function configIdentity() {
   }));
 }
 function digest(filename) { safe(filename); return hash(fs.readFileSync(filename)); }
+function normalizeBuildOutput(directory) {
+  const pending = [];
+  function inspect(filename, directoryRequired = false) {
+    const stat = fs.lstatSync(filename);
+    if (stat.isSymbolicLink()) {
+      // Next's external-package aliases point into this release's dependencies.
+      // Keep those aliases without traversing or changing their targets.
+      const target = fs.realpathSync(filename);
+      if (!directoryRequired && path.dirname(filename) === path.join(directory, ".next/node_modules")
+        && target.startsWith(directory + "/node_modules/") && fs.lstatSync(target).isDirectory()) return;
+      fail();
+    }
+    if (fs.realpathSync(filename) !== filename || stat.uid !== uid
+      || (directoryRequired ? !stat.isDirectory() : !stat.isDirectory() && !stat.isFile())
+      || (stat.isFile() && stat.nlink !== 1)) fail();
+    pending.push([filename, stat.mode & 0o7777]);
+    if (stat.isDirectory()) for (const name of fs.readdirSync(filename)) inspect(path.join(filename, name));
+  }
+  for (const suffix of [".next", "server/dist", "shared/contracts/dist"]) {
+    const root = path.join(directory, suffix);
+    safe(path.dirname(root), true);
+    inspect(root, true);
+  }
+  // Next can explicitly create group-writable outputs despite the controller's
+  // umask. Inspect every tree before changing modes; never traverse links or alter
+  // source, dependencies, configuration, bytes, ownership or read/execute bits.
+  for (const [filename, mode] of pending) if (mode & 0o022) fs.chmodSync(filename, mode & ~0o022);
+}
 function loadState(checkCurrent = true) {
   safe(acceptedPath, false, true);
   if (fs.statSync(acceptedPath).size > 8192) fail();
@@ -218,6 +246,8 @@ async function main() {
     }
     const manifest = JSON.parse(fs.readFileSync(directory + "/package.json", "utf8"));
     for (const key of ["contracts:build","build:server","typecheck"]) if (typeof manifest.scripts?.[key] !== "string") fail();
+  } else if (command === "normalize-build-output") {
+    normalizeBuildOutput(release(args[0]));
   } else if (command === "pm2-required") {
     processDefinitions([release(args[0])], true);
   } else if (command === "pm2-scope") {
@@ -395,6 +425,8 @@ STAGE=build-and-test
         tests/express-https.test.ts tests/express-identity.test.ts
     /usr/bin/env -i HOME="$HOME_DIR" PATH="$PATH" NEXT_TELEMETRY_DISABLED=1 npm run typecheck
 )
+STAGE=normalize-build-output
+helper normalize-build-output "$CANDIDATE"
 helper preflight >/dev/null
 hub_pm2 jlist | helper pm2-required "$PREVIOUS_RELEASE"
 helper websites "$PREVIOUS_RELEASE"

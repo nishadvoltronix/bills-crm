@@ -22,7 +22,7 @@ const node = app + "/runtime/node/bin/node", pm2 = "/usr/local/bin/pm2";
 const sha = value => createHash("sha256").update(value).digest("hex");
 
 function fixture() {
-  const files = new Map(), reads = [], writes = [], logs = [], requests = [];
+  const files = new Map(), reads = [], writes = [], chmods = [], logs = [], requests = [];
   let inode = 1, rejectStateRename = false;
   function add(filename, body = null, mode = body === null ? 0o755 : 0o644) {
     if (!files.has(filename)) files.set(filename, { body, mode, inode: inode++ });
@@ -43,6 +43,8 @@ function fixture() {
       add(directory + "/" + filename, "reviewed source:" + filename);
     }
     add(directory + "/server");
+    add(directory + "/server/dist/cli.js", "generated API");
+    add(directory + "/shared/contracts/dist/index.js", "generated contracts");
     add(directory + "/.next/static/chunks/common.js", "shared identical vendor asset");
     add(directory + "/.next/static/chunks/release.js", "asset:" + directory);
     add(directory + "/package.json", JSON.stringify({ scripts: {
@@ -54,7 +56,7 @@ function fixture() {
     if (!value) throw Error("fixture ENOENT");
     return {
       dev: 1, ino: value.inode, size: value.body?.length ?? 0, mtimeMs: 100, ctimeMs: 100,
-      mode: value.mode, uid: 1000, nlink: 1,
+      mode: value.mode, uid: value.uid ?? 1000, nlink: value.nlink ?? 1,
       isSymbolicLink: () => Boolean(value.target),
       isDirectory: () => value.body === null && !value.target,
       isFile: () => value.body !== null && !value.target,
@@ -77,6 +79,10 @@ function fixture() {
     writeFileSync(filename, body, options) {
       if (options.flag === "wx" && files.has(filename)) throw Error("fixture EEXIST");
       writes.push(filename); add(filename, body, options.mode);
+    },
+    chmodSync(filename, mode) {
+      if (!files.has(filename)) throw Error("fixture ENOENT");
+      chmods.push(filename); files.get(filename).mode = mode;
     },
     symlinkSync(target, filename) {
       if (files.has(filename)) throw Error("fixture EEXIST");
@@ -123,7 +129,7 @@ function fixture() {
       args: [role, "--env-file", home + "/hub-config/" + (role === "api" ? "backend" : "frontend") + ".env"],
     } }));
   }
-  return { files, reads, writes, logs, requests, fs, accepted, run, definitions, fixtureState,
+  return { files, reads, writes, chmods, logs, requests, fs, accepted, run, definitions, fixtureState,
     rejectStateRename() { rejectStateRename = true; } };
 }
 
@@ -164,6 +170,69 @@ test("deployment requires the existing source checkout and checks its parent wit
     assert.deepEqual(f.writes, []);
     assert.ok(!f.reads.includes(home + "/hub-config/backend.env"));
   }
+});
+
+test("build output normalization preserves bytes and read/execute bits while removing only generated group/other write", async () => {
+  const f = fixture();
+  const modes = new Map([
+    [candidate + "/.next", [0o775, 0o755]],
+    [candidate + "/.next/static/chunks/release.js", [0o664, 0o644]],
+    [candidate + "/server/dist/cli.js", [0o777, 0o755]],
+    [candidate + "/shared/contracts/dist/index.js", [0o622, 0o600]],
+  ]);
+  for (const [filename, [mode]] of modes) f.files.get(filename).mode = mode;
+  const before = new Map([...f.files].map(([filename, value]) => [filename, { ...value }]));
+  assert.equal(await f.run("normalize-build-output", candidate), 0);
+  assert.deepEqual([...f.chmods].sort(), [...modes.keys()].sort());
+  for (const [filename, original] of before) {
+    const current = f.files.get(filename);
+    assert.equal(current.body, original.body, filename);
+    assert.equal(current.inode, original.inode, filename);
+    assert.equal(current.mode, modes.get(filename)?.[1] ?? original.mode, filename);
+  }
+  assert.deepEqual(f.writes, []);
+  assert.ok(!f.reads.includes(home + "/hub-config/backend.env"));
+});
+
+test("build output normalization refuses linked or foreign output before any chmod and never follows a generated escape", async () => {
+  for (const mutate of [
+    f => { f.files.get(candidate + "/.next").target = home + "/hub-config"; },
+    f => { f.fs.symlinkSync(home + "/hub-config/backend.env", candidate + "/.next/static/escape.js"); },
+    f => { f.files.get(candidate + "/shared/contracts/dist/index.js").nlink = 2; },
+    f => { f.files.get(candidate + "/shared/contracts/dist/index.js").uid = 0; },
+    f => { f.files.get(candidate + "/shared/contracts").mode = 0o775; },
+  ]) {
+    const f = fixture();
+    f.files.get(candidate + "/.next/static/chunks/release.js").mode = 0o664;
+    mutate(f);
+    assert.equal(await f.run("normalize-build-output", candidate), 1);
+    assert.deepEqual(f.chmods, []);
+    assert.deepEqual(f.writes, []);
+    assert.equal(f.files.get(candidate + "/.next/static/chunks/release.js").mode, 0o664);
+    assert.equal(f.files.get(home + "/hub-config/backend.env").mode, 0o600);
+    assert.ok(!f.reads.includes(home + "/hub-config/backend.env"));
+  }
+});
+
+test("build output normalization preserves Next external-package aliases without traversing or chmodding dependencies", async () => {
+  const f = fixture();
+  const aliases = candidate + "/.next/node_modules", dependencies = candidate + "/node_modules";
+  f.files.set(aliases, { body: null, mode: 0o775, inode: 9001 });
+  f.files.set(dependencies, { body: null, mode: 0o775, inode: 9002 });
+  f.files.set(dependencies + "/mysql2", { body: null, mode: 0o777, inode: 9003 });
+  f.fs.symlinkSync(dependencies + "/mysql2", aliases + "/mysql2-3d80281e5ed34ca6");
+  assert.equal(await f.run("normalize-build-output", candidate), 0);
+  assert.deepEqual(f.chmods, [aliases]);
+  assert.equal(f.files.get(aliases).mode, 0o755);
+  assert.equal(f.files.get(dependencies).mode, 0o775);
+  assert.equal(f.files.get(dependencies + "/mysql2").mode, 0o777);
+  assert.equal(f.files.get(aliases + "/mysql2-3d80281e5ed34ca6").target, dependencies + "/mysql2");
+  assert.deepEqual(f.writes, []);
+  const escaped = fixture();
+  escaped.files.set(aliases, { body: null, mode: 0o775, inode: 9001 });
+  escaped.fs.symlinkSync(home + "/hub-config", aliases + "/mysql2-3d80281e5ed34ca6");
+  assert.equal(await escaped.run("normalize-build-output", candidate), 1);
+  assert.deepEqual(escaped.chmods, []);
 });
 
 test("PM2 validation refuses unrelated ownership, duplicates and offline definitions without mutation", async () => {
@@ -316,7 +385,9 @@ test("ecosystem limits changes to HUB processes and never serializes backend cre
 test("controller orders build, activation, health acceptance and persistence without broad cleanup", () => {
   const activation = script.indexOf("STAGE=activate");
   const build = script.indexOf("STAGE=build-and-test");
+  const normalization = script.indexOf('helper normalize-build-output "$CANDIDATE"');
   assert.ok(build > 0 && activation > build);
+  assert.ok(normalization > script.indexOf("npm run typecheck") && normalization < activation);
   assert.ok(script.indexOf('helper commit "$CANDIDATE" "$COMMIT"') > activation);
   assert.match(script, /flock --nonblock 9/);
   assert.match(script, /git -C "\$REPO" archive --format=tar "\$COMMIT"/);

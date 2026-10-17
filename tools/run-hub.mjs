@@ -282,10 +282,19 @@ export async function main(args, inherited = process.env, root = projectRoot) {
 // argv[1]. Its absolute pm_exec_path identifies the application; role arguments
 // still begin at argv[2], exactly as for a direct Node invocation.
 const pm2Entrypoint = process.env.pm_exec_path;
+const ownsPm2Entrypoint = Boolean(pm2Entrypoint && isAbsolute(pm2Entrypoint)
+  && pathToFileURL(resolve(pm2Entrypoint)).href === import.meta.url);
 if ((process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url)
-  || (pm2Entrypoint && isAbsolute(pm2Entrypoint) && pathToFileURL(resolve(pm2Entrypoint)).href === import.meta.url)) {
+  || ownsPm2Entrypoint) {
   main(process.argv.slice(2)).catch(error => {
     process.stderr.write(`${error instanceof Error ? error.message : "HUB startup failed."}\n`);
     process.exitCode = 1;
+  }).finally(() => {
+    // PM2 instrumentation can keep its IPC channel referenced after our child
+    // drains or fails. Release only this launcher's channel so the process exits
+    // naturally, preserving flushed output, exit status and normal CLI behavior.
+    if (ownsPm2Entrypoint && process.connected && typeof process.disconnect === "function") {
+      try { process.disconnect(); } catch { process.exitCode = 1; }
+    }
   });
 }

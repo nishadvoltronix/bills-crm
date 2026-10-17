@@ -21,7 +21,7 @@ function fixture(t) {
     "deploy/ubuntu/hub-ecosystem.config.cjs", "deploy/ubuntu/hub-logrotate.conf",
     "docs/manual-deployment-guide.md", "docs/final-release-checklist.md", "docs/mysql-production-operator-guide.md",
     "docs/runtime-excluded-assets.md", "docs/staging-acceptance.md", "docs/backend-production-environment.md",
-    "docs/legacy-production-compatibility.md", "docs/production-preparation-report.md"]) put(path);
+    "docs/legacy-production-compatibility.md", "docs/production-preparation-report.md", "docs/hub-production-operations.md"]) put(path);
   for (const path of ['package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.server.json', 'tsconfig.server.build.json', 'tsconfig.demo.json']) put(path, '{}\n');
   for (const path of ['next.config.ts', 'eslint.config.mjs']) put(path);
   put('.env.example', 'CRM_FRONTEND_BACKEND=express\nCRM_EXPRESS_ORIGIN=http://127.0.0.1:3002\nAPP_ORIGIN=http://127.0.0.1:3001\n');
@@ -75,10 +75,10 @@ test("deployment publication includes exact Bills/HUB tooling and six reviewed e
 
 test("deployment documentation is an exact reviewed selection, not permission for internal reports", () => {
   for (const path of ["docs/manual-deployment-guide.md", "docs/final-release-checklist.md", "docs/mysql-production-operator-guide.md",
-    "docs/runtime-excluded-assets.md", "docs/staging-acceptance.md", "docs/backend-production-environment.md"]) {
+    "docs/runtime-excluded-assets.md", "docs/staging-acceptance.md", "docs/backend-production-environment.md", "docs/hub-production-operations.md"]) {
     assert.equal(classifyPublicationPath(path), "source");
   }
-  for (const path of ["docs/crm-readiness-report.md", "docs/approval.json", "docs/customer-export.md", "docs/.env.example"]) {
+  for (const path of ["docs/crm-readiness-report.md", "docs/approval.json", "docs/customer-export.md", "docs/.env.example", "docs/hub-production-operations.private.md"]) {
     assert.notEqual(classifyPublicationPath(path), "source");
   }
 });

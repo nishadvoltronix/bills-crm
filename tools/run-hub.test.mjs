@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { chmodSync, linkSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -20,6 +20,34 @@ const api = { ...common, CRM_API_ENVIRONMENT: "production", CRM_API_HOST: "127.0
 const identity = { service: "bills-crm-api", instanceId: common.CRM_API_INSTANCE_ID, appOrigin: common.APP_ORIGIN };
 const serialize = values => Object.entries(values).map(([key, value]) => `${key}='${value}'`).join("\n");
 const fixture = () => mkdtempSync(join(homedir(), ".hub-launcher-test-"));
+
+// PM2 7.0.4 ForkMode spawns ProcessContainerFork.js with an IPC descriptor;
+// its injected instrumentation can subscribe to messages and keep it referenced.
+// Exercise a real OS child/channel, leaving argv untouched like that container.
+const ipcImport = "process.on('message', message => { if (message === 'finish-import') process.disconnect(); });\n";
+function runIpcContainer(container, args, options, finishImported = false) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [container, ...args], {
+      ...options, stdio: ["ignore", "pipe", "pipe", "ipc"], windowsHide: true,
+    });
+    let stdout = "", stderr = "", timedOut = false, disconnected = false, importedWithChannel = false;
+    const deadline = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, 8_000);
+    child.stdout.on("data", bytes => { stdout += bytes; });
+    child.stderr.on("data", bytes => { stderr += bytes; });
+    child.on("disconnect", () => { disconnected = true; });
+    child.on("message", message => {
+      if (finishImported && message?.imported === true) {
+        importedWithChannel = message.connected === true && child.connected;
+        if (child.connected) child.send("finish-import");
+      }
+    });
+    child.once("error", error => { clearTimeout(deadline); reject(error); });
+    child.once("close", (code, signal) => {
+      clearTimeout(deadline);
+      resolve({ code, signal, stdout, stderr, timedOut, disconnected, importedWithChannel });
+    });
+  });
+}
 
 test("HUB profiles require every setting and isolate backend secrets from frontend/build processes", () => {
   for (const [kind, values] of [["web", web], ["api", api]]) {
@@ -212,11 +240,12 @@ test("PM2 fork-container ESM startup executes every build stage with only fronte
     mkdirSync(dirname(launcher)); writeFileSync(launcher, readFileSync(new URL("./run-hub.mjs", import.meta.url)));
     // Actual PM2 ForkMode.js spawns node ProcessContainerFork.js followed by app
     // args. The container dynamically imports pm_exec_path and leaves argv alone.
-    writeFileSync(container, "import(require('node:url').pathToFileURL(process.env.pm_exec_path));\n");
-    const started = spawnSync(process.execPath, [container, "build", "--env-file", file], {
-      cwd: root, env: { ...inherited, pm_exec_path: launcher, pm_cwd: root }, encoding: "utf8", windowsHide: true, timeout: 15_000,
+    writeFileSync(container, ipcImport + "import(require('node:url').pathToFileURL(process.env.pm_exec_path));\n");
+    const started = await runIpcContainer(container, ["build", "--env-file", file], {
+      cwd: root, env: { ...inherited, pm_exec_path: launcher, pm_cwd: root },
     });
-    assert.equal(started.error, undefined); assert.equal(started.status, 0, started.stderr);
+    assert.equal(started.timedOut, false, "A completed PM2 build must close its own IPC channel before the deadline.");
+    assert.equal(started.signal, null); assert.equal(started.code, 0, started.stderr); assert.equal(started.disconnected, true);
     assert.equal(readFileSync(join(root, "build-stages.txt"), "utf8"), "shared/contracts/tsconfig.json\ntsconfig.server.build.json\nbuild\n");
     assert.doesNotThrow(() => assertBuildOutput(root, validateProfile("web", web)));
     // A failed rebuild removes the old success marker and never reaches later stages.
@@ -227,7 +256,7 @@ test("PM2 fork-container ESM startup executes every build stage with only fronte
   } finally { rmSync(directory, { recursive: true }); }
 });
 
-test("PM2 imported API entrypoint preserves role/env-file args; unrelated imports stay inert", () => {
+test("PM2 IPC startup failure exits nonzero promptly and unrelated imports preserve the owning channel", async () => {
   const directory = fixture(), root = join(directory, "release"), launcher = join(root, "tools/run-hub.mjs");
   try {
     mkdirSync(dirname(launcher), { recursive: true });
@@ -236,19 +265,21 @@ test("PM2 imported API entrypoint preserves role/env-file args; unrelated import
     writeFileSync(frontendFile, serialize(web), { mode: 0o600 });
     // A real child process supplies argv; the harness does not invoke main or
     // reproduce its entrypoint predicate. This models the deployed PM2 ESM import.
-    writeFileSync(container, "import(require('node:url').pathToFileURL(process.env.pm_exec_path));\n");
+    writeFileSync(container, ipcImport + "import(require('node:url').pathToFileURL(process.env.pm_exec_path));\n");
     const os = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(?:PATH|SYSTEMROOT|WINDIR|HOME|USERPROFILE|TEMP|TMP|TMPDIR)$/i.test(key)));
-    const result = spawnSync(process.execPath, [container, "api", "--env-file", frontendFile], {
-      cwd: root, env: { ...os, pm_exec_path: launcher, pm_cwd: root }, encoding: "utf8", windowsHide: true, timeout: 10_000,
+    const result = await runIpcContainer(container, ["api", "--env-file", frontendFile], {
+      cwd: root, env: { ...os, pm_exec_path: launcher, pm_cwd: root },
     });
-    assert.equal(result.error, undefined); assert.equal(result.status, 1, result.stderr);
+    assert.equal(result.timedOut, false, "A failed PM2 startup must exit so its supervisor can restart it.");
+    assert.equal(result.signal, null); assert.equal(result.code, 1, result.stderr); assert.equal(result.disconnected, true);
     assert.match(result.stderr, /Cannot load the external HUB environment file/);
     assert.doesNotMatch(result.stderr, /Usage:/); // api and --env-file reached main intact.
     const importer = join(directory, "other-application.cjs");
-    writeFileSync(importer, "import(require('node:url').pathToFileURL(process.env.HUB_TEST_IMPORT));\n");
-    const imported = spawnSync(process.execPath, [importer, "api", "--env-file", frontendFile], {
-      cwd: root, env: { ...os, pm_exec_path: importer, HUB_TEST_IMPORT: launcher }, encoding: "utf8", windowsHide: true, timeout: 10_000,
-    });
-    assert.equal(imported.error, undefined); assert.equal(imported.status, 0); assert.equal(imported.stderr, "");
+    writeFileSync(importer, ipcImport + "import(require('node:url').pathToFileURL(process.env.HUB_TEST_IMPORT)).then(() => { process.send({imported:true,connected:process.connected}); });\n");
+    const imported = await runIpcContainer(importer, ["api", "--env-file", frontendFile], {
+      cwd: root, env: { ...os, pm_exec_path: importer, HUB_TEST_IMPORT: launcher },
+    }, true);
+    assert.equal(imported.timedOut, false); assert.equal(imported.code, 0); assert.equal(imported.stderr, "");
+    assert.equal(imported.importedWithChannel, true, "Importing HUB from another PM2 application must not disconnect that application's IPC.");
   } finally { rmSync(directory, { recursive: true }); }
 });

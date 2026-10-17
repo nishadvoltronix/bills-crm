@@ -17,6 +17,7 @@
   "docs/PUBLICATION.gitignore",
   "docs/backend-production-environment.md",
   "docs/final-release-checklist.md",
+  "docs/hub-production-operations.md",
   "docs/manual-deployment-guide.md",
   "docs/mysql-production-operator-guide.md",
   "docs/runtime-excluded-assets.md",
